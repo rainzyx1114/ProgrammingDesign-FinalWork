@@ -3,7 +3,8 @@
 
 #include <string>
 #include <vector>
-#include <memory>
+#include <unordered_map>
+#include <cctype>
 
 
 enum class TokenType {
@@ -16,14 +17,15 @@ enum class TokenType {
     EQUAL, EQUAL_EQUAL,
     GREATER, GREATER_EQUAL,
     LESS, LESS_EQUAL,
+    AND, OR,
 
     // Literals
     IDENTIFIER, STRING, NUMBER,
 
     // Keywords
-    AND, CLASS, ELSE, FALSE, FUN, FOR, IF, NIL, OR,
-    PRINT, RETURN, SUPER, THIS, TRUE, VAR, WHILE, UNKNOWN,
-    eof
+    CLASS, ELSE, FALSE, FOR, IF, NIL,
+    PRINT, RETURN, PUBLIC, THIS, TRUE, WHILE, UNKNOWN,
+    eof, INT, DOUBLE, BOOL, FLOAT, CHAR, VOID, STRING_TYPE, STRUCT, CONST
 };
 
 class Token {
@@ -34,7 +36,7 @@ public:
     int columnNumber;
     
     Token(TokenType t, const std::string& lex, int line, int col);
-    std::string toString() const;
+
 };
 
 class Lexer {
@@ -45,6 +47,7 @@ private:
     int lineNumber;
     int columnNumber;
     std::vector<Token> tokens;
+    static std::unordered_map<std::string, TokenType> keywords;
 
 public:
     explicit Lexer(const std::string& src);
@@ -58,6 +61,10 @@ private:
     Token makeToken(TokenType type);
     bool match(char expected);
     char peek() const;
+    char peekNext() const;
+    Token readString();
+    Token readNumber();
+    Token readIdentifier();
 };
 
 #endif

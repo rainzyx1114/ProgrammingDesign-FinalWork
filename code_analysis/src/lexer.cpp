@@ -1,12 +1,31 @@
 #include "lexer.h"
 
+std::unordered_map<std::string, TokenType> Lexer::keywords = {
+    {"class", TokenType::CLASS},
+    {"else", TokenType::ELSE},
+    {"false", TokenType::FALSE},
+    {"for", TokenType::FOR},
+    {"if", TokenType::IF},
+    {"nil", TokenType::NIL},
+    {"print", TokenType::PRINT},
+    {"return", TokenType::RETURN},
+    {"public", TokenType::PUBLIC},
+    {"this", TokenType::THIS},
+    {"true", TokenType::TRUE},
+    {"int", TokenType::INT},
+    {"double", TokenType::DOUBLE},
+    {"bool", TokenType::BOOL},
+    {"float", TokenType::FLOAT},
+    {"char", TokenType::CHAR},
+    {"void", TokenType::VOID},
+    {"string", TokenType::STRING_TYPE},
+    {"struct", TokenType::STRUCT},
+    {"const", TokenType::CONST},
+    {"while", TokenType::WHILE}
+};
+
 Token::Token(TokenType t, const std::string& lex, int line, int col)
     : type(t), lexeme(lex), lineNumber(line), columnNumber(col) {
-}
-
-std::string Token::toString() const {
-    // Implementation
-    return "";
 }
 
 Lexer::Lexer(const std::string& src): source(src), current(0), start(0), lineNumber(1), columnNumber(1), tokens() {
@@ -50,6 +69,12 @@ Token Lexer::nextToken() {
         case '>':
             token = makeToken(match('=') ? TokenType::GREATER_EQUAL : TokenType::GREATER);
             break;
+        case '&':
+            token = makeToken(match('&') ? TokenType::AND : TokenType::UNKNOWN);
+            break;
+        case '|':
+            token = makeToken(match('|') ? TokenType::OR : TokenType::UNKNOWN);
+            break;
         case '/':
             if (match('/')) {
             while (peek() != '\n' && !isAtEnd()) advance();
@@ -63,8 +88,17 @@ Token Lexer::nextToken() {
             break;
         case '\n':
             lineNumber++;
-            columnNumber = 1;
+            columnNumber = 0;
             break;
+        case '"':
+            token = readString();
+            break;
+        default:
+            if (std::isdigit(c)) {
+                token = readNumber();
+            }else if (std::isalpha(c) || c == '_') {
+                token = readIdentifier();
+            }
     }
     return token;
 }
@@ -82,7 +116,7 @@ bool Lexer::isAtEnd() const {
 
 Token Lexer::makeToken(TokenType type) {
     std::string lexeme = source.substr(start, current - start);
-    return Token(type, lexeme, lineNumber, columnNumber);
+    return Token(type, lexeme, lineNumber, columnNumber - 1);
 }
 
 bool Lexer::match(char expected) {
@@ -96,4 +130,42 @@ bool Lexer::match(char expected) {
 char Lexer::peek() const {
     if (isAtEnd()) return '\0';
     return source[current];
+}
+
+char Lexer::peekNext() const {
+    if (current + 1 >= source.length()) return '\0';
+    return source[current + 1];
+}
+
+Token Lexer::readString() {
+    while( peek() != '"' && !isAtEnd()) {
+        if (peek() == '\n') {
+            lineNumber++;
+            columnNumber = 0;
+        }
+        advance();
+    }
+    if (!isAtEnd()) {
+        advance(); 
+    }
+    std::string value = source.substr(start + 1, current - start - 2);
+    return Token(TokenType::STRING, value, lineNumber, columnNumber - 1);
+}
+
+Token Lexer::readNumber() {
+    while(std::isdigit(peek())) {advance();}
+    if (peek() == '.' && std::isdigit(peekNext())) {
+        advance();
+        while(std::isdigit(peek())) {advance();}
+    }
+    std::string value = source.substr(start, current - start);
+    return Token(TokenType::NUMBER, value, lineNumber, columnNumber - 1);
+}
+
+Token Lexer::readIdentifier() {
+    while(std::isalnum(peek()) || peek() == '_') {advance();}
+    std::string value = source.substr(start, current - start);
+    auto it = keywords.find(value);
+    TokenType type = (it != keywords.end()) ? it->second : TokenType::IDENTIFIER;
+    return Token(type, value, lineNumber, columnNumber - 1);
 }
