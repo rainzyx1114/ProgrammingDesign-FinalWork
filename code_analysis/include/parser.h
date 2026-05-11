@@ -23,7 +23,6 @@ private:
     Token previous() const;
     Token advance();
     bool check(TokenType type) const;
-    bool match(TokenType type);
     bool match(const std::vector<TokenType>& types);
     Token consume(TokenType type, const std::string& message);
     bool isAtEnd() const;

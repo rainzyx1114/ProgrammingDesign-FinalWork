@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include "lexer.h"
 
-// Forward declarations
 class Type;
 class Expr;
 class Stmt;
@@ -25,26 +25,30 @@ public:
 
 class BinaryOp : public Expr {
 public:
-    std::string op;
+    Token op;
     std::shared_ptr<Expr> left;
     std::shared_ptr<Expr> right;
+    BinaryOp(std::shared_ptr<Expr> lhs, Token oper, std::shared_ptr<Expr> rhs)
+        : left(std::move(lhs)), op(std::move(oper)), right(std::move(rhs)) {}
 };
 
 class UnaryOp : public Expr {
 public:
-    std::string op;
+    Token op;
     std::shared_ptr<Expr> operand;
+    UnaryOp(Token oper, std::shared_ptr<Expr> expr)
+        : op(std::move(oper)), operand(std::move(expr)) {}
 };
 
 class Literal : public Expr {
 public:
-    std::string value;
-    std::string type;
+    Token value;
+    Literal(Token val): value(std::move(val)) {}
 };
 
 class Variable : public Expr {
 public:
-    std::string name;
+    Token name;
 };
 
 class FunctionCall : public Expr {

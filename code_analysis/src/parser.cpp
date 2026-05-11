@@ -1,7 +1,6 @@
 #include "parser.h"
 
-Parser::Parser(const std::vector<Token>& toks)
-    : tokens(toks), current(0) {
+Parser::Parser(const std::vector<Token>& toks): tokens(toks), current(0) {
 }
 
 std::shared_ptr<Program> Parser::parse() {
@@ -10,32 +9,30 @@ std::shared_ptr<Program> Parser::parse() {
 }
 
 Token Parser::peek() const {
-    // Implementation
-    return Token(TokenType::UNKNOWN, "", 0, 0);
+    return tokens[current];
 }
 
 Token Parser::previous() const {
-    // Implementation
-    return Token(TokenType::UNKNOWN, "", 0, 0);
+    return tokens[current - 1];
 }
 
 Token Parser::advance() {
-    // Implementation
-    return Token(TokenType::UNKNOWN, "", 0, 0);
+    if (!isAtEnd()) {current++;}
+    return previous();
 }
 
 bool Parser::check(TokenType type) const {
-    // Implementation
-    return false;
-}
-
-bool Parser::match(TokenType type) {
-    // Implementation
-    return false;
+    if (isAtEnd()) return false;
+    return peek().type == type;
 }
 
 bool Parser::match(const std::vector<TokenType>& types) {
-    // Implementation
+    for (const auto& type: types) {
+        if (check(type)) {
+            advance();
+            return true;
+        }
+    }
     return false;
 }
 
@@ -45,8 +42,7 @@ Token Parser::consume(TokenType type, const std::string& message) {
 }
 
 bool Parser::isAtEnd() const {
-    // Implementation
-    return true;
+    return peek().type == TokenType::eof;
 }
 
 void Parser::error(const std::string& message) {
@@ -113,8 +109,7 @@ std::shared_ptr<Stmt> Parser::expressionStatement() {
 }
 
 std::shared_ptr<Expr> Parser::expression() {
-    // Implementation
-    return nullptr;
+    return equality();
 }
 
 std::shared_ptr<Expr> Parser::assignment() {
@@ -133,28 +128,52 @@ std::shared_ptr<Expr> Parser::logicalAnd() {
 }
 
 std::shared_ptr<Expr> Parser::equality() {
-    // Implementation
-    return nullptr;
+    auto expr = comparison();
+    while (match({TokenType::EQUAL_EQUAL, TokenType::BANG_EQUAL})) {
+        Token op = previous();
+        auto right = comparison();
+        expr = std::make_shared<BinaryOp>(expr, op, right);
+    }
+    return expr;
 }
 
 std::shared_ptr<Expr> Parser::comparison() {
-    // Implementation
-    return nullptr;
+    auto expr = term();
+    while (match({TokenType::GREATER, TokenType::GREATER_EQUAL, TokenType::LESS, TokenType::LESS_EQUAL})) {
+        Token op = previous();
+        auto right = term();
+        expr = std::make_shared<BinaryOp>(expr, op, right);
+    }
+    return expr;
 }
 
 std::shared_ptr<Expr> Parser::term() {
-    // Implementation
-    return nullptr;
+    auto expr = factor();
+    while (match({TokenType::PLUS, TokenType::MINUS})) {
+        Token op = previous();
+        auto right = factor();
+        expr = std::make_shared<BinaryOp>(expr, op, right);
+    }
+    return expr;
 }
 
 std::shared_ptr<Expr> Parser::factor() {
-    // Implementation
-    return nullptr;
+    auto expr = unary();
+    while (match({TokenType::STAR, TokenType::SLASH})) {
+        Token op = previous();
+        auto right = unary();
+        expr = std::make_shared<BinaryOp>(expr, op, right);
+    }
+    return expr;
 }
 
 std::shared_ptr<Expr> Parser::unary() {
-    // Implementation
-    return nullptr;
+    if (match({TokenType::BANG, TokenType::MINUS})) {
+        Token op = previous();
+        auto right = unary();
+        return std::make_shared<UnaryOp>(op, right);
+    }
+    return primary();
 }
 
 std::shared_ptr<Expr> Parser::postfix() {

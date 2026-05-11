@@ -6,7 +6,7 @@ std::unordered_map<std::string, TokenType> Lexer::keywords = {
     {"false", TokenType::FALSE},
     {"for", TokenType::FOR},
     {"if", TokenType::IF},
-    {"nil", TokenType::NIL},
+    {"NULL", TokenType::NIL},
     {"print", TokenType::PRINT},
     {"return", TokenType::RETURN},
     {"public", TokenType::PUBLIC},
