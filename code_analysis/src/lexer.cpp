@@ -169,3 +169,7 @@ Token Lexer::readIdentifier() {
     TokenType type = (it != keywords.end()) ? it->second : TokenType::IDENTIFIER;
     return Token(type, value, lineNumber, columnNumber - 1);
 }
+
+std::string Token::toString() const {
+    return lexeme;
+}

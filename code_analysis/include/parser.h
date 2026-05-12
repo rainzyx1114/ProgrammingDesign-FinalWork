@@ -24,6 +24,7 @@ private:
     Token advance();
     bool check(TokenType type) const;
     bool match(const std::vector<TokenType>& types);
+    bool match(const TokenType& type);
     Token consume(TokenType type, const std::string& message);
     bool isAtEnd() const;
     void error(const std::string& message);
@@ -54,8 +55,6 @@ private:
     std::shared_ptr<Expr> unary();
     std::shared_ptr<Expr> postfix();
     std::shared_ptr<Expr> primary();
-    
-    std::shared_ptr<Type> parseType();
 };
 
 #endif

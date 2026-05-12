@@ -59,14 +59,6 @@ std::vector<ObjectView> CodeAnalyzer::getObjectsOnHeap() {
     return std::vector<ObjectView>();
 }
 
-void CodeAnalyzer::setBreakpoint(int line) {
-    // Implementation
-}
-
-void CodeAnalyzer::removeBreakpoint(int line) {
-    // Implementation
-}
-
 int CodeAnalyzer::getCurrentLine() const {
     // Implementation
     return 0;

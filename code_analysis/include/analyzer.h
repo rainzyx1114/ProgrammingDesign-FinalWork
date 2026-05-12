@@ -48,10 +48,6 @@ public:
     std::vector<VariableInfo> getVariables();
     std::vector<ObjectView> getObjectsOnHeap();
     
-    // Breakpoints (optional, can be empty for now)
-    void setBreakpoint(int line);
-    void removeBreakpoint(int line);
-    
     // Query current position
     int getCurrentLine() const;
     std::string getCurrentFunction() const;

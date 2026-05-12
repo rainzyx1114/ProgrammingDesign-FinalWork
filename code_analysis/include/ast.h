@@ -49,6 +49,7 @@ public:
 class Variable : public Expr {
 public:
     Token name;
+    Variable(Token varName): name(std::move(varName)) {}
 };
 
 class FunctionCall : public Expr {
@@ -85,11 +86,13 @@ public:
 class ExprStmt : public Stmt {
 public:
     std::shared_ptr<Expr> expr;
+    ExprStmt(std::shared_ptr<Expr> e): expr(std::move(e)) {}
 };
 
 class Block : public Stmt {
 public:
     std::vector<std::shared_ptr<Stmt>> statements;
+    Block(std::vector<std::shared_ptr<Stmt>> stmts): statements(std::move(stmts)) {}
 };
 
 class IfStmt : public Stmt {
@@ -132,9 +135,11 @@ public:
 
 class VarDecl : public Decl {
 public:
-    std::string name;
+    Token name;
     std::shared_ptr<Type> type;
     std::shared_ptr<Expr> initializer;
+    VarDecl(Token varName, std::shared_ptr<Type> varType, std::shared_ptr<Expr> init)
+        : name(std::move(varName)), type(std::move(varType)), initializer(std::move(init)) {}
 };
 
 class FuncDecl : public Decl {

@@ -36,7 +36,7 @@ public:
     int columnNumber;
     
     Token(TokenType t, const std::string& lex, int line, int col);
-
+    std::string toString() const;
 };
 
 class Lexer {

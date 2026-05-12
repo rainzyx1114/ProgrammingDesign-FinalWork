@@ -4,21 +4,28 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include "lexer.h"
 
 class Type {
 public:
     virtual ~Type() = default;
     virtual std::string toString() const = 0;
     virtual bool equals(const Type* other) const = 0;
+    std::shared_ptr<Type> createType(TokenType tokenType);
 };
 
 class PrimitiveType : public Type {
 public:
     enum Kind {
         INT,
+        DOUBLE,
         FLOAT,
         BOOL,
-        VOID
+        CHAR,
+        VOID,
+        STRING_TYPE,
+        STRUCT,
+        CONST
     };
     
     Kind kind;
