@@ -11,7 +11,7 @@ public:
     virtual ~Type() = default;
     virtual std::string toString() const = 0;
     virtual bool equals(const Type* other) const = 0;
-    std::shared_ptr<Type> createType(TokenType tokenType);
+    static std::shared_ptr<Type> createType(TokenType tokenType);
 };
 
 class PrimitiveType : public Type {

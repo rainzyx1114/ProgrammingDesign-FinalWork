@@ -26,15 +26,16 @@ private:
     bool match(const std::vector<TokenType>& types);
     bool match(const TokenType& type);
     Token consume(TokenType type, const std::string& message);
+    Token consume(const std::vector<TokenType>& types, const std::string& message);
     bool isAtEnd() const;
-    void error(const std::string& message);
-    void synchronize();
+    std::shared_ptr<Expr> finishCall(std::shared_ptr<Expr> callee);
+    Token error(const std::string& message);
     
     // Parsing methods
-    std::shared_ptr<Decl> declaration();
+    std::shared_ptr<ASTNode> declaration();
     std::shared_ptr<ClassDecl> classDeclaration();
-    std::shared_ptr<FuncDecl> functionDeclaration();
-    std::shared_ptr<VarDecl> variableDeclaration();
+    std::shared_ptr<FuncDecl> functionDeclaration(Token returnTypeToken, Token name);
+    std::shared_ptr<VarDecl> variableDeclaration(Token typeToken, Token name);
     
     std::shared_ptr<Stmt> statement();
     std::shared_ptr<Block> block();
@@ -53,7 +54,7 @@ private:
     std::shared_ptr<Expr> term();
     std::shared_ptr<Expr> factor();
     std::shared_ptr<Expr> unary();
-    std::shared_ptr<Expr> postfix();
+    std::shared_ptr<Expr> call();
     std::shared_ptr<Expr> primary();
 };
 

@@ -1,9 +1,10 @@
 #include "parser.h"
+#include "types.h"
 
 Parser::Parser(const std::vector<Token>& toks):tokens(toks), current(0) {}
 
 std::shared_ptr<Program> Parser::parse() {
-    std::vector<std::shared_ptr<Decl>> statements;
+    std::vector<std::shared_ptr<ASTNode>> statements;
     while (!isAtEnd()) {
         auto decl = declaration();
         if (decl) {
@@ -51,42 +52,97 @@ bool Parser::match(const TokenType& type) {
 
 Token Parser::consume(TokenType type, const std::string& message) {
     if (check(type)) {return advance();}
-    return Token(TokenType::UNKNOWN, "", 0, 0);
+    return error(message);
+}
+
+Token Parser::consume(const std::vector<TokenType>& types, const std::string& message) {
+    for (auto type : types) {
+        if (check(type)) {
+            return advance();
+        }
+    }
+    return error(message);
 }
 
 bool Parser::isAtEnd() const {
     return peek().type == TokenType::eof;
 }
 
-void Parser::error(const std::string& message) {
-    // Implementation
+Token Parser::error(const std::string& message) {
+    // TODO: add real error reporting/synchronization
+    return Token(TokenType::UNKNOWN, "", peek().lineNumber, peek().columnNumber);
 }
 
-void Parser::synchronize() {
-    // Implementation
+std::shared_ptr<Expr> Parser::finishCall(std::shared_ptr<Expr> callee) {
+    std::vector<std::shared_ptr<Expr>> args;
+    if (!check(TokenType::RIGHT_PAREN)) {
+        do {
+            args.push_back(expression());
+        } while (match(TokenType::COMMA));
+    }
+    consume(TokenType::RIGHT_PAREN, "Expect ')' after arguments.");
+    return std::make_shared<FunctionCall>(callee, std::move(args));
 }
 
-std::shared_ptr<Decl> Parser::declaration() {
+std::shared_ptr<ASTNode> Parser::declaration() {
     if (match({TokenType::INT, TokenType::DOUBLE, TokenType::FLOAT, TokenType::BOOL, TokenType::CHAR, TokenType::VOID, TokenType::STRING_TYPE, TokenType::STRUCT, TokenType::CONST})) {
-        return variableDeclaration();
+        Token typeToken = previous();
+        Token name = consume(TokenType::IDENTIFIER, "Expect variable name.");
+        if (match(TokenType::LEFT_PAREN)) {
+            return functionDeclaration(typeToken, name);
+        } else {
+            return variableDeclaration(typeToken, name);
+        }
+    }
+    if (match(TokenType::CLASS)) {
+        return classDeclaration();
     }
     return statement();
 }
 
 std::shared_ptr<ClassDecl> Parser::classDeclaration() {
-    // Implementation
-    return nullptr;
+    Token name = consume(TokenType::IDENTIFIER, "Expect class name.");
+    Token superclass = Token(TokenType::UNKNOWN, "", 0, 0);
+    if (match(TokenType::COLON)) {
+        consume(TokenType::PUBLIC, "Expect 'public' before superclass name.");
+        superclass = consume(TokenType::IDENTIFIER, "Expect superclass name.");
+    }
+    if (!match(TokenType::LEFT_BRACE)) {
+        error("Expect '{' before class body.");
+        return nullptr;
+    }
+    std::vector<std::shared_ptr<VarDecl>> members;
+    std::vector<std::shared_ptr<FuncDecl>> methods;
+    while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
+        auto decl = declaration();
+        if (decl) {
+            if (auto varDecl = std::dynamic_pointer_cast<VarDecl>(decl)) {
+                members.push_back(varDecl);
+            } else if (auto funcDecl = std::dynamic_pointer_cast<FuncDecl>(decl)) {
+                methods.push_back(funcDecl);
+            }
+        }
+    }
+    consume(TokenType::RIGHT_BRACE, "Expect '}' after class body.");
+    return std::make_shared<ClassDecl>(name, superclass, std::move(members), std::move(methods));
 }
 
-std::shared_ptr<FuncDecl> Parser::functionDeclaration() {
-    // Implementation
-    return nullptr;
+std::shared_ptr<FuncDecl> Parser::functionDeclaration(Token returnTypeToken, Token name) {
+    std::vector<std::pair<Token, std::shared_ptr<Type>>> params;
+    if (!check(TokenType::RIGHT_PAREN)) {
+        do {
+            Token paramTypeToken = consume({TokenType::INT, TokenType::DOUBLE, TokenType::FLOAT, TokenType::BOOL, TokenType::CHAR, TokenType::VOID, TokenType::STRING_TYPE, TokenType::STRUCT, TokenType::CONST}, "Expect parameter type.");
+            Token paramName = consume(TokenType::IDENTIFIER, "Expect parameter name.");
+            params.emplace_back(paramName, Type::createType(paramTypeToken.type));
+        } while (match(TokenType::COMMA));
+    }
+    consume(TokenType::RIGHT_PAREN, "Expect ')' after parameters.");
+    std::shared_ptr<Type> returnType = Type::createType(returnTypeToken.type);
+    return std::make_shared<FuncDecl>(name, std::move(params), returnType, nullptr);
 }
 
-std::shared_ptr<VarDecl> Parser::variableDeclaration() {
-    Token typeToken = previous();
-    Token name = consume(TokenType::IDENTIFIER, "Expect variable name.");
-    Expr initializer = nullptr;
+std::shared_ptr<VarDecl> Parser::variableDeclaration(Token typeToken, Token name) {
+    std::shared_ptr<Expr> initializer = nullptr;
     if (match(TokenType::EQUAL)) {
         initializer = expression();
     }
@@ -104,6 +160,12 @@ std::shared_ptr<Stmt> Parser::statement() {
     if (match(TokenType::WHILE)) {
         return whileStatement();
     }
+    if (match(TokenType::FOR)) {
+        return forStatement();
+    }
+    if (match(TokenType::RETURN)) {
+        return returnStatement();
+    }
     return expressionStatement();
 }
 
@@ -115,6 +177,7 @@ std::shared_ptr<Block> Parser::block() {
             statements.push_back(stmt);
         }
     }
+    consume(TokenType::RIGHT_BRACE, "Expect '}' after block.");
     return std::make_shared<Block>(std::move(statements));
 }
 
@@ -139,19 +202,45 @@ std::shared_ptr<WhileStmt> Parser::whileStatement() {
 }
 
 std::shared_ptr<ForStmt> Parser::forStatement() {
-    // Implementation
-    return nullptr;
+    consume(TokenType::LEFT_PAREN, "Expect '(' after 'for'.");
+    std::shared_ptr<ASTNode> initializer;
+    if (match(TokenType::SEMICOLON)) {
+        initializer = nullptr;
+    } else if (match({TokenType::INT, TokenType::DOUBLE, TokenType::FLOAT, TokenType::BOOL, TokenType::CHAR, TokenType::VOID, TokenType::STRING_TYPE, TokenType::STRUCT, TokenType::CONST})) {
+        Token typeToken = previous();
+        Token name = consume(TokenType::IDENTIFIER, "Expect variable name.");
+        initializer = variableDeclaration(typeToken, name);
+    } else {
+        initializer = expressionStatement();
+    }
+    std::shared_ptr<Expr> condition = nullptr;
+    if (!check(TokenType::SEMICOLON)) {
+        condition = expression();
+    }
+    consume(TokenType::SEMICOLON, "Expect ';' after loop condition.");
+    std::shared_ptr<Expr> update = nullptr;
+    if (!check(TokenType::RIGHT_PAREN)) {
+        update = expression();
+    }
+    consume(TokenType::RIGHT_PAREN, "Expect ')' after for clauses.");
+    consume(TokenType::LEFT_BRACE, "Expect '{' before for loop body.");
+    auto body = block();
+    return std::make_shared<ForStmt>(initializer, condition, update, body);
 }
 
 std::shared_ptr<ReturnStmt> Parser::returnStatement() {
-    // Implementation
-    return nullptr;
+    std::shared_ptr<Expr> value = nullptr;
+    if (!check(TokenType::SEMICOLON)) {
+        value = expression();
+    }
+    consume(TokenType::SEMICOLON, "Expect a ';' afer return value.");
+    return std::make_shared<ReturnStmt>(value);
 }
 
 std::shared_ptr<Stmt> Parser::expressionStatement() {
     auto expr = expression();
     consume(TokenType::SEMICOLON, "Expect ';' after expression.");
-    return std::make_shared<Exprstmt>(expr);
+    return std::make_shared<ExprStmt>(expr);
 }
 
 std::shared_ptr<Expr> Parser::expression() {
@@ -159,13 +248,13 @@ std::shared_ptr<Expr> Parser::expression() {
 }
 
 std::shared_ptr<Expr> Parser::assignment() {
-    auto expr = LogicalOr();
+    auto expr = logicalOr();
     if (match(TokenType::EQUAL)) {
         Token equals = previous();
         auto value = assignment();
         if (std::dynamic_pointer_cast<Variable>(expr)) {
             Token name = std::dynamic_pointer_cast<Variable>(expr)->name;
-            return std::make_shared<Assign>(name, value);
+            return std::make_shared<Assignment>(name, value);
         }
     }
     return expr;
@@ -175,7 +264,7 @@ std::shared_ptr<Expr> Parser::logicalOr() {
     auto expr = logicalAnd();
     while (match(TokenType::OR)) {
         Token op = previous();
-        auto right = LogicalAnd();
+        auto right = logicalAnd();
         expr = std::make_shared<LogicalOp>(expr, op, right);
     }
     return expr;
@@ -237,12 +326,19 @@ std::shared_ptr<Expr> Parser::unary() {
         auto right = unary();
         return std::make_shared<UnaryOp>(op, right);
     }
-    return primary();
+    return call();
 }
 
-std::shared_ptr<Expr> Parser::postfix() {
-    // Implementation
-    return nullptr;
+std::shared_ptr<Expr> Parser::call() {
+    auto expr = primary();
+    while (true) {
+        if (match(TokenType::LEFT_PAREN)) {
+            expr = finishCall(expr);
+        } else {
+            break;
+        }
+    }
+    return expr;
 }
 
 std::shared_ptr<Expr> Parser::primary() {

@@ -57,6 +57,7 @@ Token Lexer::nextToken() {
         case '+': token = makeToken(TokenType::PLUS); break;
         case ';': token = makeToken(TokenType::SEMICOLON); break;
         case '*': token = makeToken(TokenType::STAR); break;
+        case ':': token = makeToken(TokenType::COLON); break;
         case '!':
             token = makeToken(match('=') ? TokenType::BANG_EQUAL : TokenType::BANG);
             break;
