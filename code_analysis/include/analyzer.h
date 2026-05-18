@@ -13,6 +13,39 @@
 #include "class_model.h"
 #include "visualization_data.h"
 
+// Concrete visitor for analyzing AST
+class ASTAnalyzer : public Visitor {
+private:
+    std::shared_ptr<SymbolTable> symbolTable;
+    std::shared_ptr<TypeSystem> typeSystem;
+    std::shared_ptr<ClassModel> classModel;
+    std::shared_ptr<Memory> memory;
+
+public:
+    ASTAnalyzer(std::shared_ptr<SymbolTable> st, std::shared_ptr<TypeSystem> ts,
+                std::shared_ptr<ClassModel> cm, std::shared_ptr<Memory> mem);
+
+    void visit(BinaryOp& node) override;
+    void visit(LogicalOp& node) override;
+    void visit(UnaryOp& node) override;
+    void visit(Literal& node) override;
+    void visit(Variable& node) override;
+    void visit(FunctionCall& node) override;
+    void visit(MemberAccess& node) override;
+    void visit(ArrayAccess& node) override;
+    void visit(Assignment& node) override;
+    void visit(ExprStmt& node) override;
+    void visit(Block& node) override;
+    void visit(IfStmt& node) override;
+    void visit(WhileStmt& node) override;
+    void visit(ForStmt& node) override;
+    void visit(ReturnStmt& node) override;
+    void visit(VarDecl& node) override;
+    void visit(FuncDecl& node) override;
+    void visit(ClassDecl& node) override;
+    void visit(Program& node) override;
+};
+
 class CodeAnalyzer {
 private:
     std::shared_ptr<Lexer> lexer;
@@ -22,6 +55,7 @@ private:
     std::shared_ptr<TypeSystem> typeSystem;
     std::shared_ptr<ClassModel> classModel;
     std::shared_ptr<Executor> executor;
+    std::shared_ptr<ASTAnalyzer> astAnalyzer;
     
     std::shared_ptr<Program> program;
     bool isLoaded;

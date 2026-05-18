@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <functional>
+#include <stack>
 #include "ast.h"
 #include "memory.h"
 #include "symbol_table.h"
@@ -18,7 +19,7 @@ enum class ExecutionMode {
     PAUSED
 };
 
-class Executor {
+class ExecutorVisitor : public Visitor {
 private:
     std::shared_ptr<Memory> memory;
     std::shared_ptr<SymbolTable> symbolTable;
@@ -32,15 +33,42 @@ private:
     Value returnValue;
     int nextLineToExecute;
     
-public:
-    Executor(std::shared_ptr<Memory> mem,
-             std::shared_ptr<SymbolTable> sym,
-             std::shared_ptr<TypeSystem> types,
-             std::shared_ptr<ClassModel> cls);
+    // Execution stack for nested calls
+    std::stack<std::shared_ptr<ASTNode>> callStack;
     
-    // Execution control
+public:
+    ExecutorVisitor(std::shared_ptr<Memory> mem,
+                   std::shared_ptr<SymbolTable> sym,
+                   std::shared_ptr<TypeSystem> types,
+                   std::shared_ptr<ClassModel> cls);
+    
+    // Visitor methods for statements
+    void visit(ExprStmt& node) override;
+    void visit(Block& node) override;
+    void visit(IfStmt& node) override;
+    void visit(WhileStmt& node) override;
+    void visit(ForStmt& node) override;
+    void visit(ReturnStmt& node) override;
+    
+    // Visitor methods for expressions (return values)
+    void visit(BinaryOp& node) override;
+    void visit(LogicalOp& node) override;
+    void visit(UnaryOp& node) override;
+    void visit(Literal& node) override;
+    void visit(Variable& node) override;
+    void visit(FunctionCall& node) override;
+    void visit(MemberAccess& node) override;
+    void visit(ArrayAccess& node) override;
+    void visit(Assignment& node) override;
+    
+    // Visitor methods for declarations
+    void visit(VarDecl& node) override;
+    void visit(FuncDecl& node) override;
+    void visit(ClassDecl& node) override;
+    void visit(Program& node) override;
+    
+    // Public interface methods
     void executeProgram(const std::shared_ptr<Program>& program);
-    void executeStatement(const std::shared_ptr<Stmt>& stmt);
     Value evaluateExpression(const std::shared_ptr<Expr>& expr);
     
     // Single step execution
@@ -53,30 +81,43 @@ public:
     std::shared_ptr<Memory> getMemory() const { return memory; }
     ExecutionMode getMode() const { return mode; }
     int getNextLine() const { return nextLineToExecute; }
+    bool hasReturnValue() const { return shouldReturn; }
+    Value getReturnValue() const { return returnValue; }
     
 private:
-    // Statement execution
-    void executeExprStmt(const std::shared_ptr<ExprStmt>& stmt);
-    void executeBlock(const std::shared_ptr<Block>& stmt);
-    void executeIfStmt(const std::shared_ptr<IfStmt>& stmt);
-    void executeWhileStmt(const std::shared_ptr<WhileStmt>& stmt);
-    void executeForStmt(const std::shared_ptr<ForStmt>& stmt);
-    void executeReturnStmt(const std::shared_ptr<ReturnStmt>& stmt);
-    
-    // Expression evaluation
-    Value evaluateBinaryOp(const std::shared_ptr<BinaryOp>& expr);
-    Value evaluateUnaryOp(const std::shared_ptr<UnaryOp>& expr);
-    Value evaluateLiteral(const std::shared_ptr<Literal>& expr);
-    Value evaluateVariable(const std::shared_ptr<Variable>& expr);
-    Value evaluateFunctionCall(const std::shared_ptr<FunctionCall>& expr);
-    Value evaluateMemberAccess(const std::shared_ptr<MemberAccess>& expr);
-    Value evaluateArrayAccess(const std::shared_ptr<ArrayAccess>& expr);
-    Value evaluateAssignment(const std::shared_ptr<Assignment>& expr);
-    
     // Helper functions
     bool isTrue(const Value& val) const;
     Value applyBinaryOp(const std::string& op, const Value& left, const Value& right);
     Value applyUnaryOp(const std::string& op, const Value& val);
+    
+    // Current evaluation result (for expressions)
+    Value currentValue;
+};
+
+class Executor {
+private:
+    std::shared_ptr<ExecutorVisitor> visitor;
+    
+public:
+    Executor(std::shared_ptr<Memory> mem,
+             std::shared_ptr<SymbolTable> sym,
+             std::shared_ptr<TypeSystem> types,
+             std::shared_ptr<ClassModel> cls);
+    
+    // Execution control
+    void executeProgram(const std::shared_ptr<Program>& program);
+    Value evaluateExpression(const std::shared_ptr<Expr>& expr);
+    
+    // Single step execution
+    void stepInto();
+    void stepOver();
+    void stepOut();
+    void runUntilBreakpoint(int line);
+    
+    // Query execution state
+    std::shared_ptr<Memory> getMemory() const;
+    ExecutionMode getMode() const;
+    int getNextLine() const;
 };
 
 #endif

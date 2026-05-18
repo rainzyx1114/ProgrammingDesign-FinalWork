@@ -10,8 +10,8 @@ struct VariableInfo {
     std::string name;
     std::string type;
     std::string value;
-    bool isPointer;
-    std::string pointsTo;
+    // bool isPointer;
+    // std::string pointsTo;
 };
 
 struct StackFrameView {

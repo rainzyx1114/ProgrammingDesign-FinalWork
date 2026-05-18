@@ -26,18 +26,15 @@ std::string Value::toString() const {
 }
 
 int Value::toInt() const {
-    // Implementation
-    return 0;
+    return intVal;
 }
 
 float Value::toFloat() const {
-    // Implementation
-    return 0.0f;
+    return floatVal;
 }
 
 bool Value::toBool() const {
-    // Implementation
-    return false;
+    return boolVal;
 }
 
 Value Object::getMember(const std::string& name) const {
