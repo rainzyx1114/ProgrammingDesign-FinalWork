@@ -39,3 +39,28 @@
 
 # debug information files
 *.dwo
+
+# Qt ignore
+build-*/
+*.user
+*.user.*
+*.Debug
+*.Release
+Makefile*
+*.o
+*.obj
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# Qt qmake 临时文件
+.qmake.stash
+.qmake.cache
+
+# Qt Creator 缓存文件夹 (产生几百个 .idx 文件的罪魁祸首)
+.qtc_clangd/
+.clang/
+
+# 编译输出目录（再确认一遍）
+build/
+build-*/
