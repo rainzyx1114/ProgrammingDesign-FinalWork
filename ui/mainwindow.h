@@ -2,6 +2,25 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include<QVBoxLayout>
+#include<vector>
+#include<string>
+
+struct VariableInfo {
+    std::string name;
+    std::string type;
+    std::string value;
+};
+
+struct StackFrameView {
+    std::string functionName;
+    int lineNumber;
+    std::vector<VariableInfo> variables;
+};
+
+struct StackTraceView {
+    std::vector<StackFrameView> frames;
+};
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -15,6 +34,7 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+    void renderStackTrace(const StackTraceView& trace);
 
 signals:
     void sendCodeToBackend(const std::string& code);
@@ -24,5 +44,8 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
+    QVBoxLayout *mainStackLayout; // 用来存放所有栈帧的垂直布局
+
+    void clearLayout(QLayout *layout); // 辅助函数：清空旧UI
 };
 #endif // MAINWINDOW_H

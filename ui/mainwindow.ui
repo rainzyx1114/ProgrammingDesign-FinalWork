@@ -37,7 +37,7 @@ background-color#019237
 }</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout" stretch="6">
+   <layout class="QVBoxLayout" name="verticalLayout" stretch="0">
     <item>
      <widget class="QSplitter" name="splitter">
       <property name="orientation">
@@ -206,10 +206,89 @@ QToolBar { background: transparent; border: none; }
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="right_widget" native="true">
+      <widget class="QScrollArea" name="StackScrollArea">
        <property name="styleSheet">
-        <string notr="true">background-color: lightblue;</string>
+        <string notr="true">QScrollArea {
+    border: none;
+    background-color: #F3F4F6;
+}
+
+/* 必须设置滚动区域内部容器的背景色 */
+#qt_scrollarea_viewport, #qt_scrollarea_widgetcontents {
+    background-color: #F3F4F6;
+}
+
+/* 2. 栈帧卡片 (GroupBox) 样式 */
+QGroupBox {
+    background-color: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px; /* 圆角 */
+    margin-top: 24px;   /* 给标题留出空间 */
+    padding-top: 10px;
+}
+
+/* 函数名标题样式 */
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 15px;
+    top: 5px;
+    color: #2563EB;     /* 亮蓝色 */
+    font-weight: bold;
+    font-size: 14px;
+    background-color: transparent;
+}
+
+/* 3. 变量表格样式 */
+QTableWidget {
+    background-color: transparent;
+    border: none;
+    gridline-color: #E5E7EB; /* 浅灰色网格线 */
+    color: #1F2937;          /* 字体深灰色 */
+}
+
+/* 表头样式 */
+QHeaderView::section {
+    background-color: #F9FAFB;
+    color: #6B7280;
+    border: none;
+    border-bottom: 2px solid #E5E7EB;
+    font-weight: bold;
+    padding: 4px;
+}
+
+/* 4. 美化滚动条 (变细、变圆滑) */
+QScrollBar:vertical {
+    border: none;
+    background: transparent;
+    width: 8px;
+    margin: 0px 0px 0px 0px;
+}
+QScrollBar::handle:vertical {
+    background: #D1D5DB;
+    min-height: 20px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #9CA3AF;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}</string>
        </property>
+       <property name="widgetResizable">
+        <bool>true</bool>
+       </property>
+       <widget class="QWidget" name="scrollAreaWidgetContents">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>228</width>
+          <height>339</height>
+         </rect>
+        </property>
+       </widget>
       </widget>
      </widget>
     </item>
@@ -239,7 +318,7 @@ QToolBar { background: transparent; border: none; }
   </widget>
   <action name="actionnext">
    <property name="icon">
-    <iconset resource="resources.qrc">
+    <iconset>
      <normaloff>:/icons/icons/arrow_forward_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg</normaloff>:/icons/icons/arrow_forward_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg</iconset>
    </property>
    <property name="text">
@@ -254,7 +333,7 @@ QToolBar { background: transparent; border: none; }
   </action>
   <action name="actionprev">
    <property name="icon">
-    <iconset resource="resources.qrc">
+    <iconset>
      <normaloff>:/icons/icons/arrow_back_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg</normaloff>:/icons/icons/arrow_back_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg</iconset>
    </property>
    <property name="text">
@@ -269,7 +348,7 @@ QToolBar { background: transparent; border: none; }
   </action>
   <action name="actionfirst">
    <property name="icon">
-    <iconset resource="resources.qrc">
+    <iconset>
      <normaloff>:/icons/icons/first.svg</normaloff>:/icons/icons/first.svg</iconset>
    </property>
    <property name="text">
@@ -284,7 +363,7 @@ QToolBar { background: transparent; border: none; }
   </action>
   <action name="actionlast">
    <property name="icon">
-    <iconset resource="resources.qrc">
+    <iconset>
      <normaloff>:/icons/icons/last.svg</normaloff>:/icons/icons/last.svg</iconset>
    </property>
    <property name="text">
@@ -298,8 +377,6 @@ QToolBar { background: transparent; border: none; }
    </property>
   </action>
  </widget>
- <resources>
-  <include location="resources.qrc"/>
- </resources>
+ <resources/>
  <connections/>
 </ui>
