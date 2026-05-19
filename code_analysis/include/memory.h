@@ -14,7 +14,7 @@ public:
     std::map<std::string, Value> variables;
     std::shared_ptr<StackFrame> previousFrame;
     
-    StackFrame(const std::string& name);
+    StackFrame(const std::string& name, std::shared_ptr<StackFrame> pre);
     
     Value getVariable(const std::string& name) const;
     void setVariable(const std::string& name, const Value& val);

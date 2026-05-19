@@ -21,8 +21,14 @@ Value::Value(std::shared_ptr<Object> obj)
 }
 
 std::string Value::toString() const {
-    // Implementation
-    return "";
+    switch (type) {
+        case UNINITIALIZED: return "uninitialized";
+        case INT: return std::to_string(intVal);
+        case FLOAT: return std::to_string(floatVal);
+        case BOOL: return boolVal ? "true" : "false";
+        case OBJECT_REF: return "object_ref(" + (objectRef ? objectRef->className : std::string("null")) + ")";
+        default: return "";
+    }
 }
 
 int Value::toInt() const {
@@ -38,10 +44,11 @@ bool Value::toBool() const {
 }
 
 Value Object::getMember(const std::string& name) const {
-    // Implementation
+    auto it = members.find(name);
+    if (it != members.end()) return it->second;
     return Value();
 }
 
 void Object::setMember(const std::string& name, const Value& val) {
-    // Implementation
+    members[name] = val;
 }

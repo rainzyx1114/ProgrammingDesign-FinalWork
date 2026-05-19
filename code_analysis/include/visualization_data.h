@@ -12,6 +12,8 @@ struct VariableInfo {
     std::string value;
     // bool isPointer;
     // std::string pointsTo;
+    VariableInfo(const std::string n, const std::string t, const std::string v):name(n), type(t), value(v){}
+    VariableInfo() = default;
 };
 
 struct StackFrameView {
@@ -19,7 +21,6 @@ struct StackFrameView {
     int lineNumber;
     std::vector<VariableInfo> variables;
 };
-
 struct StackTraceView {
     std::vector<StackFrameView> frames;
 };

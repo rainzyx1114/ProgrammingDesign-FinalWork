@@ -14,14 +14,16 @@ public:
     int scopeLevel;
     bool isInitialized;
     
+    Symbol() = default;
     Symbol(const std::string& n, std::shared_ptr<Type> t, int level);
+    Symbol(const std::string& n, std::shared_ptr<Type> t, int level, bool initialized);
 };
 
 class SymbolTable {
 private:
     std::vector<std::map<std::string, Symbol>> scopes;
     int currentLevel;
-    
+
 public:
     SymbolTable();
     
@@ -29,7 +31,7 @@ public:
     void exitScope();
     void declare(const std::string& name, std::shared_ptr<Type> type);
     Symbol* lookup(const std::string& name);
-    Symbol* lookupLocal(const std::string& name);
+    Symbol* lookupLocal(const std::string& name, int level);
     void markInitialized(const std::string& name);
     bool isDeclared(const std::string& name);
     

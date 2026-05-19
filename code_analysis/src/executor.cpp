@@ -178,9 +178,7 @@ void ExecutorVisitor::visit(Literal& node) {
 }
 
 void ExecutorVisitor::visit(Variable& node) {
-    // Look up variable in symbol table and memory
-    // currentValue = memory->get(symbolTable->getAddress(node.name.lexeme));
-    currentValue = Value(); // Placeholder
+    currentValue = memory->getVariable(node.name.lexeme);
 }
 
 void ExecutorVisitor::visit(FunctionCall& node) {
@@ -217,10 +215,8 @@ void ExecutorVisitor::visit(ArrayAccess& node) {
 void ExecutorVisitor::visit(Assignment& node) {
     if (node.value) node.value->accept(*this);
     Value val = currentValue;
-    
-    // Store value in variable
-    // memory->set(symbolTable->getAddress(node.name.lexeme), val);
-    currentValue = val; // Assignment returns the assigned value
+    memory->setVariable(node.name.lexeme, val);
+    currentValue = val; 
 }
 
 // Declaration visitors
@@ -231,10 +227,8 @@ void ExecutorVisitor::visit(VarDecl& node) {
         initialValue = currentValue;
     }
     
-    // Declare variable in symbol table and allocate memory
-    // auto address = memory->allocate(node.type);
-    // symbolTable->declare(node.name.lexeme, address);
-    // if (node.initializer) memory->set(address, initialValue);
+   symbolTable->declare(node.name.lexeme, node.type);
+   memory->setVariable(node.name.lexeme, initialValue);
 }
 
 void ExecutorVisitor::visit(FuncDecl& node) {

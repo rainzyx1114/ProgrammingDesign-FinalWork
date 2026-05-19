@@ -28,8 +28,7 @@ void ASTAnalyzer::visit(Literal& node) {
 }
 
 void ASTAnalyzer::visit(Variable& node) {
-    // Check if variable is declared in symbol table
-    // symbolTable->lookup(node.name.lexeme);
+    symbolTable->isDeclared(node.name.lexeme);
 }
 
 void ASTAnalyzer::visit(FunctionCall& node) {
@@ -96,8 +95,7 @@ void ASTAnalyzer::visit(ReturnStmt& node) {
 }
 
 void ASTAnalyzer::visit(VarDecl& node) {
-    // Add variable to symbol table
-    // symbolTable->declare(node.name.lexeme, node.type);
+    symbolTable->declare(node.name.lexeme, node.type);
     if (node.initializer) node.initializer->accept(*this);
 }
 
@@ -155,7 +153,7 @@ std::string CodeAnalyzer::getParseError() const {
 }
 
 void CodeAnalyzer::start() {
-    // Implementation
+    runContinuously();
 }
 
 void CodeAnalyzer::stepExecute() {
@@ -163,7 +161,10 @@ void CodeAnalyzer::stepExecute() {
 }
 
 void CodeAnalyzer::runContinuously() {
-    // Implementation
+    if (!program) return;
+    isExecuting = true;
+    executor->executeProgram(program);
+    isExecuting = false;
 }
 
 void CodeAnalyzer::pause() {
@@ -175,8 +176,30 @@ void CodeAnalyzer::stop() {
 }
 
 ExecutionState CodeAnalyzer::getExecutionState() {
-    // Implementation
-    return ExecutionState();
+    ExecutionState st;
+    st.isRunning = isExecuting;
+    st.isPaused = false;
+    st.currentLine = getCurrentLine();
+    st.currentFunction = getCurrentFunction();
+
+    StackTraceView stv;
+    for (auto& frame : memory->getCallStack()) {
+        StackFrameView fv;
+        fv.functionName = frame->functionName;
+        fv.lineNumber = frame->lineNumber;
+        for (auto& kv : frame->variables) {
+            VariableInfo vi;
+            vi.name = kv.first;
+            vi.type = "";
+            vi.value = kv.second.toString();
+            fv.variables.push_back(vi);
+        }
+        stv.frames.push_back(fv);
+    }
+    st.stackTrace = stv;
+    st.objectsOnHeap = getObjectsOnHeap();
+    st.executionLog = "";
+    return st;
 }
 
 StackTraceView CodeAnalyzer::getStackTrace() {
@@ -185,21 +208,47 @@ StackTraceView CodeAnalyzer::getStackTrace() {
 }
 
 std::vector<VariableInfo> CodeAnalyzer::getVariables() {
-    // Implementation
-    return std::vector<VariableInfo>();
+    std::vector<VariableInfo> out;
+    auto frame = memory->currentFrame();
+    if (!frame) return out;
+    for (auto& kv : frame->variables) {
+        VariableInfo vi;
+        vi.name = kv.first;
+        vi.type = "";
+        vi.value = kv.second.toString();
+        out.push_back(vi);
+    }
+    return out;
 }
 
 std::vector<ObjectView> CodeAnalyzer::getObjectsOnHeap() {
-    // Implementation
-    return std::vector<ObjectView>();
+    std::vector<ObjectView> out;
+    for (auto& kv : memory->getHeap()) {
+        ObjectView ov;
+        ov.objectId = kv.first;
+        ov.className = kv.second->className;
+        ov.baseClass = "";
+        for (auto& m : kv.second->members) {
+            MemberInfo mi;
+            mi.name = m.first;
+            mi.type = "";
+            mi.value = m.second.toString();
+            mi.isMethod = false;
+            ov.members.push_back(mi);
+        }
+        out.push_back(ov);
+    }
+    return out;
 }
 
 int CodeAnalyzer::getCurrentLine() const {
-    // Implementation
-    return 0;
+    auto frame = memory->currentFrame();
+    if (!frame) return 0;
+    return frame->lineNumber;
 }
 
 std::string CodeAnalyzer::getCurrentFunction() const {
-    // Implementation
-    return "";
+    auto frame = memory->currentFrame();
+    if (!frame) return std::string();
+    return frame->functionName;
 }
