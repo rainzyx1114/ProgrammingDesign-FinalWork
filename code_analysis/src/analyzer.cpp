@@ -1,34 +1,31 @@
 #include "analyzer.h"
 
 ASTAnalyzer::ASTAnalyzer(std::shared_ptr<SymbolTable> st, std::shared_ptr<TypeSystem> ts,
-                         std::shared_ptr<ClassModel> cm, std::shared_ptr<Memory> mem)
-    : symbolTable(st), typeSystem(ts), classModel(cm), memory(mem) {}
+                         std::shared_ptr<ClassModel> cm)
+    : symbolTable(st), typeSystem(ts), classModel(cm) {}
 
 void ASTAnalyzer::visit(BinaryOp& node) {
-    // Analyze left and right operands
     if (node.left) node.left->accept(*this);
     if (node.right) node.right->accept(*this);
-    // Perform type checking for binary operations
-    // Implementation depends on type system
 }
 
 void ASTAnalyzer::visit(LogicalOp& node) {
     if (node.left) node.left->accept(*this);
     if (node.right) node.right->accept(*this);
-    // Type checking for logical operations
 }
 
 void ASTAnalyzer::visit(UnaryOp& node) {
     if (node.operand) node.operand->accept(*this);
-    // Type checking for unary operations
 }
 
 void ASTAnalyzer::visit(Literal& node) {
-    // Handle literal values
 }
 
 void ASTAnalyzer::visit(Variable& node) {
-    symbolTable->isDeclared(node.name.lexeme);
+    Symbol* s = symbolTable->lookup(node.name.lexeme);
+    if (s) {
+        node.binding = s->binding;
+    }
 }
 
 void ASTAnalyzer::visit(FunctionCall& node) {
@@ -36,22 +33,21 @@ void ASTAnalyzer::visit(FunctionCall& node) {
     for (auto& arg : node.args) {
         if (arg) arg->accept(*this);
     }
-    // Check function signature and arguments
 }
 
 void ASTAnalyzer::visit(MemberAccess& node) {
     if (node.object) node.object->accept(*this);
-    // Check member access validity
 }
 
 void ASTAnalyzer::visit(ArrayAccess& node) {
     if (node.array) node.array->accept(*this);
     if (node.index) node.index->accept(*this);
-    // Check array bounds and type
 }
 
 void ASTAnalyzer::visit(Assignment& node) {
     if (node.value) node.value->accept(*this);
+    Symbol* s = symbolTable->lookup(node.name.lexeme);
+    if (s) node.binding = s->binding;
     // Check assignment compatibility
 }
 
@@ -60,12 +56,12 @@ void ASTAnalyzer::visit(ExprStmt& node) {
 }
 
 void ASTAnalyzer::visit(Block& node) {
-    // Enter new scope
     symbolTable->enterScope();
+    int level = symbolTable->getCurrentLevel();
     for (auto& stmt : node.statements) {
         if (stmt) stmt->accept(*this);
     }
-    // Exit scope
+    node.slotCount = symbolTable->getSlotCountForLevel(level);
     symbolTable->exitScope();
 }
 
@@ -91,18 +87,34 @@ void ASTAnalyzer::visit(ForStmt& node) {
 
 void ASTAnalyzer::visit(ReturnStmt& node) {
     if (node.value) node.value->accept(*this);
-    // Check return type compatibility
 }
 
 void ASTAnalyzer::visit(VarDecl& node) {
-    symbolTable->declare(node.name.lexeme, node.type);
-    if (node.initializer) node.initializer->accept(*this);
+    // allocate binding for this declaration and attach it to the VarDecl node
+    Binding b = symbolTable->declare(node.name.lexeme, node.type, node.name);
+    node.binding = b;
+
+    if (node.initializer) {
+        node.initializer->accept(*this);
+        symbolTable->markInitialized(node.name.lexeme);
+    }
 }
 
 void ASTAnalyzer::visit(FuncDecl& node) {
-    // Add function to symbol table
-    // symbolTable->declareFunction(node.name.lexeme, node.returnType, node.params);
+    // register function 
+    symbolTable->declareFunction(node.name.lexeme, &node);
+    // analyze body in its own scope and bind parameters
+    symbolTable->enterScope();
+    int level = symbolTable->getCurrentLevel();
+    node.param_bindings.clear();
+    for (auto& p : node.params) {
+        Binding b = symbolTable->declare(p.first.lexeme, p.second, p.first);
+        node.param_bindings.push_back(b);
+        symbolTable->markInitialized(p.first.lexeme);
+    }
+    node.paramSlotCount = symbolTable->getSlotCountForLevel(level);
     if (node.body) node.body->accept(*this);
+    symbolTable->exitScope();
 }
 
 void ASTAnalyzer::visit(ClassDecl& node) {
@@ -128,7 +140,7 @@ CodeAnalyzer::CodeAnalyzer()
     symbolTable = std::make_shared<SymbolTable>();
     typeSystem = std::make_shared<TypeSystem>();
     classModel = std::make_shared<ClassModel>();
-    astAnalyzer = std::make_shared<ASTAnalyzer>(symbolTable, typeSystem, classModel, memory);
+    astAnalyzer = std::make_shared<ASTAnalyzer>(symbolTable, typeSystem, classModel);
     executor = std::make_shared<Executor>(memory, symbolTable, typeSystem, classModel);
 }
 
@@ -187,13 +199,7 @@ ExecutionState CodeAnalyzer::getExecutionState() {
         StackFrameView fv;
         fv.functionName = frame->functionName;
         fv.lineNumber = frame->lineNumber;
-        for (auto& kv : frame->variables) {
-            VariableInfo vi;
-            vi.name = kv.first;
-            vi.type = "";
-            vi.value = kv.second.toString();
-            fv.variables.push_back(vi);
-        }
+        // Variables per frame not tracked by name in this runtime model; leave empty
         stv.frames.push_back(fv);
     }
     st.stackTrace = stv;
@@ -209,13 +215,13 @@ StackTraceView CodeAnalyzer::getStackTrace() {
 
 std::vector<VariableInfo> CodeAnalyzer::getVariables() {
     std::vector<VariableInfo> out;
-    auto frame = memory->currentFrame();
-    if (!frame) return out;
-    for (auto& kv : frame->variables) {
+    // Present current lexical slots as unnamed variables for visualization
+    auto slots = memory->getCurrentLexicalSlots();
+    for (size_t i = 0; i < slots.size(); ++i) {
         VariableInfo vi;
-        vi.name = kv.first;
+        vi.name = "slot" + std::to_string(i);
         vi.type = "";
-        vi.value = kv.second.toString();
+        vi.value = slots[i].toString();
         out.push_back(vi);
     }
     return out;

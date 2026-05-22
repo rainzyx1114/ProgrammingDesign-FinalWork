@@ -19,11 +19,13 @@ private:
     std::shared_ptr<SymbolTable> symbolTable;
     std::shared_ptr<TypeSystem> typeSystem;
     std::shared_ptr<ClassModel> classModel;
-    std::shared_ptr<Memory> memory;
 
 public:
     ASTAnalyzer(std::shared_ptr<SymbolTable> st, std::shared_ptr<TypeSystem> ts,
-                std::shared_ptr<ClassModel> cm, std::shared_ptr<Memory> mem);
+                std::shared_ptr<ClassModel> cm);
+
+    // CodeAnalyzer will set executor later
+    friend class CodeAnalyzer;
 
     void visit(BinaryOp& node) override;
     void visit(LogicalOp& node) override;

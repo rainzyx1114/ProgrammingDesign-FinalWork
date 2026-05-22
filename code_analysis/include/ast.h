@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include "lexer.h"
+#include "binding.h"
 
 class Type;
 class Expr;
@@ -65,7 +66,8 @@ public:
 class Variable : public Expr {
 public:
     Token name;
-    Variable(Token varName): name(std::move(varName)) {}
+    Binding binding;
+    Variable(Token varName): name(std::move(varName)), binding() {}
     void accept(Visitor& visitor) override;
 };
 
@@ -96,8 +98,9 @@ public:
 class Assignment : public Expr {
 public:
     Token name;
+    Binding binding; // analyzer fills this
     std::shared_ptr<Expr> value;
-    Assignment(Token nam, std::shared_ptr<Expr> val):name(std::move(nam)), value(std::move(val)) {}
+    Assignment(Token nam, std::shared_ptr<Expr> val):name(std::move(nam)), binding(), value(std::move(val)) {}
     void accept(Visitor& visitor) override;
 };
 
@@ -117,7 +120,8 @@ public:
 class Block : public Stmt {
 public:
     std::vector<std::shared_ptr<Stmt>> statements;
-    Block(std::vector<std::shared_ptr<Stmt>> stmts): statements(std::move(stmts)) {}
+    int slotCount;
+    Block(std::vector<std::shared_ptr<Stmt>> stmts): statements(std::move(stmts)), slotCount(0) {}
     void accept(Visitor& visitor) override;
 };
 
@@ -167,10 +171,11 @@ public:
 class VarDecl : public Decl {
 public:
     Token name;
+    Binding binding; // analyzer records slot for this declaration
     std::shared_ptr<Type> type;
     std::shared_ptr<Expr> initializer;
     VarDecl(Token varName, std::shared_ptr<Type> varType, std::shared_ptr<Expr> init)
-        : name(std::move(varName)), type(std::move(varType)), initializer(std::move(init)) {}
+        : name(std::move(varName)), binding(), type(std::move(varType)), initializer(std::move(init)) {}
     void accept(Visitor& visitor) override;
 };
 
@@ -178,10 +183,12 @@ class FuncDecl : public Decl {
 public:
     Token name;
     std::vector<std::pair<Token, std::shared_ptr<Type>>> params;
+    std::vector<Binding> param_bindings; // analyzer records bindings for params
+    int paramSlotCount;
     std::shared_ptr<Type> returnType;
     std::shared_ptr<Block> body;
     FuncDecl(Token funcName, std::vector<std::pair<Token, std::shared_ptr<Type>>> parameters, std::shared_ptr<Type> retType, std::shared_ptr<Block> funcBody)
-        : name(std::move(funcName)), params(std::move(parameters)), returnType(std::move(retType)), body(std::move(funcBody)) {}
+        : name(std::move(funcName)), params(std::move(parameters)), param_bindings(), paramSlotCount(0), returnType(std::move(retType)), body(std::move(funcBody)) {}
     void accept(Visitor& visitor) override;
 };
 

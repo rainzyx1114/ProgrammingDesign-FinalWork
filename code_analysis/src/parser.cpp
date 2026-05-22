@@ -138,7 +138,15 @@ std::shared_ptr<FuncDecl> Parser::functionDeclaration(Token returnTypeToken, Tok
     }
     consume(TokenType::RIGHT_PAREN, "Expect ')' after parameters.");
     std::shared_ptr<Type> returnType = Type::createType(returnTypeToken.type);
-    return std::make_shared<FuncDecl>(name, std::move(params), returnType, nullptr);
+
+    std::shared_ptr<Block> body = nullptr;
+    if (match(TokenType::LEFT_BRACE)) {
+        body = block();
+    } else {
+        error("Expect '{' before function body.");
+    }
+
+    return std::make_shared<FuncDecl>(name, std::move(params), returnType, body);
 }
 
 std::shared_ptr<VarDecl> Parser::variableDeclaration(Token typeToken, Token name) {

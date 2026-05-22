@@ -6,12 +6,24 @@ ExecutorVisitor::ExecutorVisitor(std::shared_ptr<Memory> mem,
                                std::shared_ptr<TypeSystem> types,
                                std::shared_ptr<ClassModel> cls)
     : memory(mem), symbolTable(sym), typeSystem(types), classModel(cls),
-      mode(ExecutionMode::PAUSED), shouldBreak(false), shouldContinue(false),
-      shouldReturn(false), nextLineToExecute(0) {
+      mode(ExecutionMode::PAUSED), shouldBreak(false), shouldContinue(false), shouldReturn(false), nextLineToExecute(0) {
+}
+
+Executor::Executor(std::shared_ptr<Memory> mem,
+                   std::shared_ptr<SymbolTable> sym,
+                   std::shared_ptr<TypeSystem> types,
+                   std::shared_ptr<ClassModel> cls)
+    : visitor(std::make_shared<ExecutorVisitor>(mem, sym, types, cls)) {
 }
 
 void ExecutorVisitor::executeProgram(const std::shared_ptr<Program>& program) {
     if (program) {
+        // ensure lexical frames initialized based on symbol table slot counts
+        int totalLevels = symbolTable->getTotalLevels();
+        std::vector<int> slotsPerLevel;
+        for (int i = 0; i < totalLevels; ++i) slotsPerLevel.push_back(symbolTable->getSlotCountForLevel(i));
+        memory->initLexicalFrames(slotsPerLevel);
+
         program->accept(*this);
     }
 }
@@ -33,6 +45,8 @@ void ExecutorVisitor::visit(ExprStmt& node) {
 
 void ExecutorVisitor::visit(Block& node) {
     symbolTable->enterScope();
+    memory->pushScopeFrame(node.slotCount);
+
     for (auto& stmt : node.statements) {
         if (stmt) {
             stmt->accept(*this);
@@ -41,6 +55,8 @@ void ExecutorVisitor::visit(Block& node) {
             }
         }
     }
+
+    memory->popScopeFrame();
     symbolTable->exitScope();
 }
 
@@ -80,6 +96,9 @@ void ExecutorVisitor::visit(WhileStmt& node) {
 
 void ExecutorVisitor::visit(ForStmt& node) {
     symbolTable->enterScope();
+    int level = symbolTable->getCurrentLevel();
+    int slots = symbolTable->getSlotCountForLevel(level);
+    memory->pushScopeFrame(slots);
     
     if (node.init) {
         node.init->accept(*this);
@@ -106,6 +125,7 @@ void ExecutorVisitor::visit(ForStmt& node) {
         }
     }
     
+    memory->popScopeFrame();
     symbolTable->exitScope();
     shouldBreak = false;
 }
@@ -178,7 +198,12 @@ void ExecutorVisitor::visit(Literal& node) {
 }
 
 void ExecutorVisitor::visit(Variable& node) {
-    currentValue = memory->getVariable(node.name.lexeme);
+    // use binding attached to AST node by analyzer
+    if (node.binding.type) {
+        currentValue = memory->getByBinding(node.binding.scope_depth, node.binding.slot_index);
+    } else {
+        currentValue = Value();
+    }
 }
 
 void ExecutorVisitor::visit(FunctionCall& node) {
@@ -190,9 +215,55 @@ void ExecutorVisitor::visit(FunctionCall& node) {
             args.push_back(currentValue);
         }
     }
-    
-    // Call function (placeholder implementation)
-    currentValue = Value(); // Placeholder for function result
+
+    // resolve function declaration
+    FuncDecl* fdecl = nullptr;
+    if (node.name) {
+        if (auto var = dynamic_cast<Variable*>(node.name.get())) {
+            fdecl = symbolTable->lookupFunction(var->name.lexeme);
+        }
+    }
+    if (!fdecl) {
+        currentValue = Value();
+        return;
+    }
+
+    // Call: push frame and init lexical frames for function
+    memory->pushFrame(fdecl->name.lexeme);
+    int totalLevels = symbolTable->getTotalLevels();
+    std::vector<int> slotsPerLevel;
+    for (int i = 0; i < totalLevels; ++i) {
+        slotsPerLevel.push_back(symbolTable->getSlotCountForLevel(i));
+    }
+    slotsPerLevel.push_back(fdecl->paramSlotCount);
+    memory->initLexicalFrames(slotsPerLevel);
+
+    // write parameters into their bindings
+    for (size_t i = 0; i < fdecl->params.size() && i < args.size(); ++i) {
+        if (i < fdecl->param_bindings.size()) {
+            Binding b = fdecl->param_bindings[i];
+            memory->setByBinding(b.scope_depth, b.slot_index, args[i]);
+        }
+    }
+
+    // execute body
+    bool prevShouldReturn = shouldReturn;
+    Value prevReturnValue = returnValue;
+    shouldReturn = false;
+    returnValue = Value();
+
+    if (fdecl->body) fdecl->body->accept(*this);
+
+    Value result;
+    if (shouldReturn) result = returnValue;
+    else result = Value();
+
+    shouldReturn = prevShouldReturn;
+    returnValue = prevReturnValue;
+
+    memory->popFrame();
+
+    currentValue = result;
 }
 
 void ExecutorVisitor::visit(MemberAccess& node) {
@@ -215,8 +286,12 @@ void ExecutorVisitor::visit(ArrayAccess& node) {
 void ExecutorVisitor::visit(Assignment& node) {
     if (node.value) node.value->accept(*this);
     Value val = currentValue;
-    memory->setVariable(node.name.lexeme, val);
-    currentValue = val; 
+    if (node.binding.type) {
+        memory->setByBinding(node.binding.scope_depth, node.binding.slot_index, val);
+    } else {
+        // no binding: ignore
+    }
+    currentValue = val;
 }
 
 // Declaration visitors
@@ -226,9 +301,11 @@ void ExecutorVisitor::visit(VarDecl& node) {
         node.initializer->accept(*this);
         initialValue = currentValue;
     }
-    
-   symbolTable->declare(node.name.lexeme, node.type);
-   memory->setVariable(node.name.lexeme, initialValue);
+    if (node.binding.type) {
+        memory->setByBinding(node.binding.scope_depth, node.binding.slot_index, initialValue);
+    } else {
+        // no binding: ignore
+    }
 }
 
 void ExecutorVisitor::visit(FuncDecl& node) {
@@ -362,13 +439,7 @@ Value ExecutorVisitor::applyUnaryOp(const std::string& op, const Value& val) {
     return val; // Default case
 }
 
-// Executor class implementation
-Executor::Executor(std::shared_ptr<Memory> mem,
-                   std::shared_ptr<SymbolTable> sym,
-                   std::shared_ptr<TypeSystem> types,
-                   std::shared_ptr<ClassModel> cls) {
-    visitor = std::make_shared<ExecutorVisitor>(mem, sym, types, cls);
-}
+
 
 void Executor::executeProgram(const std::shared_ptr<Program>& program) {
     visitor->executeProgram(program);
