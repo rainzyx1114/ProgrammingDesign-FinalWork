@@ -72,6 +72,16 @@ bool SymbolTable::isDeclared(const std::string& name) {
     return lookup(name) != nullptr;
 }
 
+Symbol* SymbolTable::lookupByBinding(int scope_level, int slot_index) {
+    if (scope_level < 0 || scope_level >= (int)scopes.size()) return nullptr;
+    for (auto& kv : scopes[scope_level]) {
+        if (kv.second.binding.slot_index == slot_index) {
+            return &kv.second;
+        }
+    }
+    return nullptr;
+}
+
 void SymbolTable::declareFunction(const std::string& name, FuncDecl* decl) {
     functions[name] = decl;
 }

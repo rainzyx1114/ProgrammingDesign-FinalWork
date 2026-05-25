@@ -41,6 +41,7 @@ public:
     Symbol* lookupLocal(const std::string& name, int level);
     void markInitialized(const std::string& name);
     bool isDeclared(const std::string& name);
+    Symbol* lookupByBinding(int scope_level, int slot_index);
     
     int getCurrentLevel() const { return currentLevel; }
     int getSlotCountForLevel(int level) const { if (level < 0 || level >= (int)nextSlotIndexPerScope.size()) return 0; return nextSlotIndexPerScope[level]; }

@@ -10,6 +10,7 @@
 #include "symbol_table.h"
 #include "type_system.h"
 #include "value.h"
+#include "visualization_data.h"
 
 class ClassModel;
 
@@ -89,9 +90,21 @@ private:
     bool isTrue(const Value& val) const;
     Value applyBinaryOp(const std::string& op, const Value& left, const Value& right);
     Value applyUnaryOp(const std::string& op, const Value& val);
+    std::vector<std::vector<std::string>> buildCurrentLexicalVariableNames() const;
+    std::vector<VariableInfo> buildVariableInfoForCallFrame(int frameIndex,
+                                                           const std::vector<std::vector<Value>>& lexicalFrames,
+                                                           const std::vector<std::vector<std::string>>& lexicalNames) const;
     
     // Current evaluation result (for expressions)
     Value currentValue;
+
+    // Execution trace collection
+    std::vector<Stepsnapshot> executionTrace;
+    void recordSnapshot(const std::string& event, int lineNumber = 0);
+
+public:
+    // Expose execution trace
+    std::vector<Stepsnapshot> getExecutionTrace() const { return executionTrace; }
 };
 
 class Executor {
@@ -118,6 +131,9 @@ public:
     std::shared_ptr<Memory> getMemory() const;
     ExecutionMode getMode() const;
     int getNextLine() const;
+
+    // Execution trace access
+    std::vector<Stepsnapshot> getExecutionTrace() const;
 };
 
 #endif

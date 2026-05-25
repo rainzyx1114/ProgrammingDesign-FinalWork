@@ -193,34 +193,60 @@ ExecutionState CodeAnalyzer::getExecutionState() {
     st.isPaused = false;
     st.currentLine = getCurrentLine();
     st.currentFunction = getCurrentFunction();
-
-    StackTraceView stv;
-    for (auto& frame : memory->getCallStack()) {
-        StackFrameView fv;
-        fv.functionName = frame->functionName;
-        fv.lineNumber = frame->lineNumber;
-        // Variables per frame not tracked by name in this runtime model; leave empty
-        stv.frames.push_back(fv);
-    }
-    st.stackTrace = stv;
+    st.stackTrace = getStackTrace();
     st.objectsOnHeap = getObjectsOnHeap();
     st.executionLog = "";
     return st;
 }
 
 StackTraceView CodeAnalyzer::getStackTrace() {
-    // Implementation
-    return StackTraceView();
+    StackTraceView stv;
+    const auto& callStack = memory->getCallStack();
+    for (int frameIndex = 0; frameIndex < (int)callStack.size(); ++frameIndex) {
+        auto frame = callStack[frameIndex];
+        StackFrameView sfv;
+        sfv.functionName = frame->functionName;
+        sfv.lineNumber = frame->lineNumber;
+        auto lexicalFrames = memory->getLexicalFramesForCallFrame(frameIndex);
+        auto lexicalNames = memory->getLexicalVariableNamesForCallFrame(frameIndex);
+        int callerDepth = frame->lexicalVariableNames.size();
+        if (callerDepth > 0 && callerDepth < (int)lexicalFrames.size()) {
+            lexicalFrames = std::vector<std::vector<Value>>(lexicalFrames.begin() + callerDepth, lexicalFrames.end());
+        }
+        if (callerDepth > 0 && callerDepth < (int)lexicalNames.size()) {
+            lexicalNames = std::vector<std::vector<std::string>>(lexicalNames.begin() + callerDepth, lexicalNames.end());
+        }
+        for (int depth = 0; depth < (int)lexicalFrames.size(); ++depth) {
+            for (int slot = 0; slot < (int)lexicalFrames[depth].size(); ++slot) {
+                VariableInfo vi;
+                if (depth < (int)lexicalNames.size() && slot < (int)lexicalNames[depth].size()) {
+                    vi.name = lexicalNames[depth][slot];
+                } else {
+                    vi.name = "slot" + std::to_string(slot);
+                }
+                vi.type = "";
+                vi.value = lexicalFrames[depth][slot].toString();
+                sfv.variables.push_back(vi);
+            }
+        }
+        stv.frames.push_back(sfv);
+    }
+    return stv;
 }
 
 std::vector<VariableInfo> CodeAnalyzer::getVariables() {
     std::vector<VariableInfo> out;
-    // Present current lexical slots as unnamed variables for visualization
     auto slots = memory->getCurrentLexicalSlots();
+    auto names = memory->getLexicalVariableNames();
+    int depth = memory->getCurrentLexicalDepth();
     for (size_t i = 0; i < slots.size(); ++i) {
         VariableInfo vi;
-        vi.name = "slot" + std::to_string(i);
-        vi.type = "";
+        if (depth >= 0 && depth < (int)names.size() && i < names[depth].size()) {
+            vi.name = names[depth][i];
+        } else {
+            vi.name = "slot" + std::to_string(i);
+        }
+        vi.type = slots[i].type;
         vi.value = slots[i].toString();
         out.push_back(vi);
     }
@@ -245,6 +271,13 @@ std::vector<ObjectView> CodeAnalyzer::getObjectsOnHeap() {
         out.push_back(ov);
     }
     return out;
+}
+
+std::vector<Stepsnapshot> CodeAnalyzer::getExecutionTrace() {
+    if (executor) {
+        return executor->getExecutionTrace();
+    }
+    return {};
 }
 
 int CodeAnalyzer::getCurrentLine() const {

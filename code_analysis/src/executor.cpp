@@ -18,13 +18,17 @@ Executor::Executor(std::shared_ptr<Memory> mem,
 
 void ExecutorVisitor::executeProgram(const std::shared_ptr<Program>& program) {
     if (program) {
-        // ensure lexical frames initialized based on symbol table slot counts
+        // Setup global frame and lexical slots before executing the program.
         int totalLevels = symbolTable->getTotalLevels();
         std::vector<int> slotsPerLevel;
         for (int i = 0; i < totalLevels; ++i) slotsPerLevel.push_back(symbolTable->getSlotCountForLevel(i));
         memory->initLexicalFrames(slotsPerLevel);
+        auto globalNames = buildCurrentLexicalVariableNames();
+        memory->pushFrame("global", globalNames);
 
         program->accept(*this);
+        recordSnapshot("program_end");
+        memory->popFrame();
     }
 }
 
@@ -58,6 +62,8 @@ void ExecutorVisitor::visit(Block& node) {
 
     memory->popScopeFrame();
     symbolTable->exitScope();
+    // record scope exit
+    recordSnapshot("scope_exit");
 }
 
 void ExecutorVisitor::visit(IfStmt& node) {
@@ -131,11 +137,17 @@ void ExecutorVisitor::visit(ForStmt& node) {
 }
 
 void ExecutorVisitor::visit(ReturnStmt& node) {
+    int returnLine = 0;
     if (node.value) {
         node.value->accept(*this);
         returnValue = currentValue;
+        // if there is a value expression, use its token line when available
+        if (auto var = dynamic_cast<Variable*>(node.value.get())) {
+            returnLine = var->name.lineNumber;
+        }
     }
     shouldReturn = true;
+    recordSnapshot("return", returnLine);
 }
 
 // Expression visitors
@@ -218,9 +230,11 @@ void ExecutorVisitor::visit(FunctionCall& node) {
 
     // resolve function declaration
     FuncDecl* fdecl = nullptr;
+    int callLine = 0;
     if (node.name) {
         if (auto var = dynamic_cast<Variable*>(node.name.get())) {
             fdecl = symbolTable->lookupFunction(var->name.lexeme);
+            callLine = var->name.lineNumber;
         }
     }
     if (!fdecl) {
@@ -229,7 +243,8 @@ void ExecutorVisitor::visit(FunctionCall& node) {
     }
 
     // Call: push frame and init lexical frames for function
-    memory->pushFrame(fdecl->name.lexeme);
+    auto callerNames = buildCurrentLexicalVariableNames();
+    memory->pushFrame(fdecl->name.lexeme, callerNames);
     int totalLevels = symbolTable->getTotalLevels();
     std::vector<int> slotsPerLevel;
     for (int i = 0; i < totalLevels; ++i) {
@@ -238,13 +253,16 @@ void ExecutorVisitor::visit(FunctionCall& node) {
     slotsPerLevel.push_back(fdecl->paramSlotCount);
     memory->initLexicalFrames(slotsPerLevel);
 
-    // write parameters into their bindings
+    // write parameters into their bindings and record their names
     for (size_t i = 0; i < fdecl->params.size() && i < args.size(); ++i) {
         if (i < fdecl->param_bindings.size()) {
             Binding b = fdecl->param_bindings[i];
             memory->setByBinding(b.scope_depth, b.slot_index, args[i]);
+            memory->setLexicalVariableName(b.scope_depth, b.slot_index, fdecl->params[i].first.lexeme);
         }
     }
+    // record entering call after parameters are set
+    recordSnapshot("call_enter", callLine);
 
     // execute body
     bool prevShouldReturn = shouldReturn;
@@ -261,6 +279,8 @@ void ExecutorVisitor::visit(FunctionCall& node) {
     shouldReturn = prevShouldReturn;
     returnValue = prevReturnValue;
 
+    // record return from call before popping frame so we capture final frame state
+    recordSnapshot("call_return", fdecl->name.lineNumber);
     memory->popFrame();
 
     currentValue = result;
@@ -292,6 +312,8 @@ void ExecutorVisitor::visit(Assignment& node) {
         // no binding: ignore
     }
     currentValue = val;
+    // record trace
+    recordSnapshot("assignment", node.name.lineNumber);
 }
 
 // Declaration visitors
@@ -303,19 +325,18 @@ void ExecutorVisitor::visit(VarDecl& node) {
     }
     if (node.binding.type) {
         memory->setByBinding(node.binding.scope_depth, node.binding.slot_index, initialValue);
+        memory->setLexicalVariableName(node.binding.scope_depth, node.binding.slot_index, node.name.lexeme);
     } else {
         // no binding: ignore
     }
+    // record trace
+    recordSnapshot("var_decl", node.name.lineNumber);
 }
 
 void ExecutorVisitor::visit(FuncDecl& node) {
-    // Store function definition
-    // symbolTable->declareFunction(node.name.lexeme, node);
 }
 
 void ExecutorVisitor::visit(ClassDecl& node) {
-    // Define class
-    // classModel->addClass(node.name.lexeme, node);
 }
 
 void ExecutorVisitor::visit(Program& node) {
@@ -439,7 +460,110 @@ Value ExecutorVisitor::applyUnaryOp(const std::string& op, const Value& val) {
     return val; // Default case
 }
 
+std::vector<std::vector<std::string>> ExecutorVisitor::buildCurrentLexicalVariableNames() const {
+    return memory->getLexicalVariableNames();
+}
 
+std::vector<VariableInfo> ExecutorVisitor::buildVariableInfoForCallFrame(int frameIndex,
+                                                           const std::vector<std::vector<Value>>& lexicalFrames,
+                                                           const std::vector<std::vector<std::string>>& lexicalNames) const {
+    std::vector<VariableInfo> vars;
+    for (int depth = 0; depth < (int)lexicalFrames.size(); ++depth) {
+        for (int slotIndex = 0; slotIndex < (int)lexicalFrames[depth].size(); ++slotIndex) {
+            VariableInfo vi;
+            if (depth < (int)lexicalNames.size() && slotIndex < (int)lexicalNames[depth].size()) {
+                vi.name = lexicalNames[depth][slotIndex];
+            } else {
+                Symbol* sym = symbolTable->lookupByBinding(depth, slotIndex);
+                if (sym) vi.name = sym->name;
+                else vi.name = "slot" + std::to_string(slotIndex);
+            }
+            if (vi.name.rfind("slot", 0) != 0) {
+                Symbol* sym = symbolTable->lookupByBinding(depth, slotIndex);
+                vi.type = sym && sym->type ? sym->type->toString() : "";
+            } else {
+                vi.type = "";
+            }
+            vi.value = lexicalFrames[depth][slotIndex].toString();
+            vars.push_back(vi);
+        }
+    }
+    return vars;
+}
+
+// Trace collection helpers
+void ExecutorVisitor::recordSnapshot(const std::string& event, int lineNumber) {
+    Stepsnapshot snap;
+    snap.stepIndex = static_cast<int>(executionTrace.size());
+    snap.event = event;
+    ExecutionState st;
+    auto frame = memory->currentFrame();
+    if (frame && lineNumber > 0) {
+        frame->lineNumber = lineNumber;
+    }
+    st.currentLine = frame ? frame->lineNumber : 0;
+    st.currentFunction = frame ? frame->functionName : std::string();
+    st.isRunning = false;
+    st.isPaused = false;
+
+    StackTraceView stv;
+    const auto& callStack = memory->getCallStack();
+    int totalFrames = callStack.size();
+    for (int frameIndex = 0; frameIndex < totalFrames; ++frameIndex) {
+        auto& f = callStack[frameIndex];
+        StackFrameView fv;
+        fv.functionName = f->functionName;
+        fv.lineNumber = f->lineNumber;
+        auto lexicalFrames = memory->getLexicalFramesForCallFrame(frameIndex);
+        auto lexicalNames = memory->getLexicalVariableNamesForCallFrame(frameIndex);
+        int callerDepth = f->lexicalVariableNames.size();
+        if (callerDepth > 0 && callerDepth < (int)lexicalFrames.size()) {
+            lexicalFrames = std::vector<std::vector<Value>>(lexicalFrames.begin() + callerDepth, lexicalFrames.end());
+        }
+        if (callerDepth > 0 && callerDepth < (int)lexicalNames.size()) {
+            lexicalNames = std::vector<std::vector<std::string>>(lexicalNames.begin() + callerDepth, lexicalNames.end());
+        }
+        fv.variables = buildVariableInfoForCallFrame(frameIndex, lexicalFrames, lexicalNames);
+        stv.frames.push_back(fv);
+    }
+    if (totalFrames == 0) {
+        StackFrameView fv;
+        fv.functionName = "global";
+        fv.lineNumber = st.currentLine;
+        auto slots = memory->getCurrentLexicalSlots();
+        for (size_t i = 0; i < slots.size(); ++i) {
+            VariableInfo vi;
+            vi.name = std::string("slot") + std::to_string(i);
+            vi.type = "";
+            vi.value = slots[i].toString();
+            fv.variables.push_back(vi);
+        }
+        stv.frames.push_back(fv);
+    }
+
+    st.stackTrace = stv;
+
+    std::vector<ObjectView> objs;
+    for (auto& kv : memory->getHeap()) {
+        ObjectView ov;
+        ov.objectId = kv.first;
+        ov.className = kv.second->className;
+        ov.baseClass = "";
+        for (auto& m : kv.second->members) {
+            MemberInfo mi;
+            mi.name = m.first;
+            mi.type = "";
+            mi.value = m.second.toString();
+            mi.isMethod = false;
+            ov.members.push_back(mi);
+        }
+        objs.push_back(ov);
+    }
+    st.objectsOnHeap = objs;
+    st.executionLog = "";
+    snap.state = st;
+    executionTrace.push_back(snap);
+}
 
 void Executor::executeProgram(const std::shared_ptr<Program>& program) {
     visitor->executeProgram(program);
@@ -475,4 +599,8 @@ ExecutionMode Executor::getMode() const {
 
 int Executor::getNextLine() const {
     return visitor->getNextLine();
+}
+
+std::vector<Stepsnapshot> Executor::getExecutionTrace() const {
+    return visitor->getExecutionTrace();
 }

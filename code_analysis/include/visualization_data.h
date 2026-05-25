@@ -50,4 +50,10 @@ struct ExecutionState {
     std::string executionLog;
 };
 
+struct Stepsnapshot {
+    int stepIndex;
+    std::string event;
+    ExecutionState state;
+};
+
 #endif

@@ -33,5 +33,17 @@ int main(int argc, char** argv) {
     auto st = analyzer.getExecutionState();
     std::cout << "ExecutionState: isRunning=" << st.isRunning << " currentLine=" << st.currentLine << "\n";
 
+    auto trace = analyzer.getExecutionTrace();
+    std::cout << "Trace count=" << trace.size() << "\n";
+    for (auto &s : trace) {
+        std::cout << s.stepIndex << ": " << s.event << " line=" << s.state.currentLine << " func=" << s.state.currentFunction << "\n";
+        for (auto &f : s.state.stackTrace.frames) {
+            std::cout << "  frame " << f.functionName << " line=" << f.lineNumber << "\n";
+            for (auto &v : f.variables) {
+                std::cout << "    " << v.name << " = " << v.value << "\n";
+            }
+        }
+    }
+
     return 0;
 }

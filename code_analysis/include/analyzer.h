@@ -72,7 +72,7 @@ public:
     
     // Execution control
     void start();
-    void stepExecute();  // Single step
+    void stepExecute();
     void runContinuously();
     void pause();
     void stop();
@@ -83,6 +83,7 @@ public:
     StackTraceView getStackTrace();
     std::vector<VariableInfo> getVariables();
     std::vector<ObjectView> getObjectsOnHeap();
+    std::vector<Stepsnapshot> getExecutionTrace();
     
     // Query current position
     int getCurrentLine() const;
