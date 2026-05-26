@@ -27,11 +27,11 @@ int main(int argc, char** argv) {
     auto vars = analyzer.getVariables();
     std::cout << "Variables:\n";
     for (auto& v : vars) {
-        std::cout << v.name << " = " << v.value << "\n";
+        std::cout << v.name << " (" << v.type << ") = " << v.value << "\n";
     }
 
     auto st = analyzer.getExecutionState();
-    std::cout << "ExecutionState: isRunning=" << st.isRunning << " currentLine=" << st.currentLine << "\n";
+    std::cout << "ExecutionState: currentLine=" << st.currentLine << " currentFunction=" << st.currentFunction << "\n";
 
     auto trace = analyzer.getExecutionTrace();
     std::cout << "Trace count=" << trace.size() << "\n";
@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
         for (auto &f : s.state.stackTrace.frames) {
             std::cout << "  frame " << f.functionName << " line=" << f.lineNumber << "\n";
             for (auto &v : f.variables) {
-                std::cout << "    " << v.name << " = " << v.value << "\n";
+                std::cout << "    " << v.name << " (" << v.type << ") = " << v.value << "\n";
             }
         }
     }

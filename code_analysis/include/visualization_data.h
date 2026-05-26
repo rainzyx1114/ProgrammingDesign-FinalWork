@@ -32,6 +32,16 @@ struct MemberInfo {
     bool isMethod;
 };
 
+struct ClassView {
+    std::string classname;
+    std::string baseClass;
+    std::vector<MemberInfo> members;
+    std::vector<MemberInfo> methods;
+    int inheritance_depth;
+    std::vector<std::string> derived_classes;
+    std::map<std::string, std::string> vtable;
+};
+
 struct ObjectView {
     std::string objectId;
     std::string className;
@@ -41,13 +51,10 @@ struct ObjectView {
 };
 
 struct ExecutionState {
-    bool isRunning;
-    bool isPaused;
     int currentLine;
     std::string currentFunction;
     StackTraceView stackTrace;
     std::vector<ObjectView> objectsOnHeap;
-    std::string executionLog;
 };
 
 struct Stepsnapshot {

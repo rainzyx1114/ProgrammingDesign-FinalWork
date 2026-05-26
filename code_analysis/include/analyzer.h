@@ -72,10 +72,10 @@ public:
     
     // Execution control
     void start();
-    void stepExecute();
+    // void stepExecute();
     void runContinuously();
-    void pause();
-    void stop();
+    // void pause();
+    // void stop();
     bool isRunning() const { return isExecuting; }
     
     // State queries
@@ -84,6 +84,7 @@ public:
     std::vector<VariableInfo> getVariables();
     std::vector<ObjectView> getObjectsOnHeap();
     std::vector<Stepsnapshot> getExecutionTrace();
+    std::vector<ClassView> getAllClassViews();
     
     // Query current position
     int getCurrentLine() const;

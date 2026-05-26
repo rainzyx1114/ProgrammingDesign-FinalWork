@@ -118,8 +118,7 @@ void ASTAnalyzer::visit(FuncDecl& node) {
 }
 
 void ASTAnalyzer::visit(ClassDecl& node) {
-    // Add class to class model
-    // classModel->addClass(node.name.lexeme, node.baseClass.lexeme);
+    classModel->defineClass(node.name.lexeme, node.baseClass.lexeme);
     for (auto& member : node.members) {
         if (member) member->accept(*this);
     }
@@ -168,9 +167,9 @@ void CodeAnalyzer::start() {
     runContinuously();
 }
 
-void CodeAnalyzer::stepExecute() {
-    // Implementation
-}
+// void CodeAnalyzer::stepExecute() {
+//     
+// }
 
 void CodeAnalyzer::runContinuously() {
     if (!program) return;
@@ -179,23 +178,20 @@ void CodeAnalyzer::runContinuously() {
     isExecuting = false;
 }
 
-void CodeAnalyzer::pause() {
-    // Implementation
-}
+// void CodeAnalyzer::pause() {
+//    
+// }
 
-void CodeAnalyzer::stop() {
-    // Implementation
-}
+// void CodeAnalyzer::stop() {
+//    
+// }
 
 ExecutionState CodeAnalyzer::getExecutionState() {
     ExecutionState st;
-    st.isRunning = isExecuting;
-    st.isPaused = false;
     st.currentLine = getCurrentLine();
     st.currentFunction = getCurrentFunction();
     st.stackTrace = getStackTrace();
     st.objectsOnHeap = getObjectsOnHeap();
-    st.executionLog = "";
     return st;
 }
 
@@ -246,7 +242,43 @@ std::vector<VariableInfo> CodeAnalyzer::getVariables() {
         } else {
             vi.name = "slot" + std::to_string(i);
         }
-        vi.type = slots[i].type;
+        
+        // Get type from symbol table if available
+        Symbol* sym = symbolTable->lookupByBinding(depth, i);
+        if (sym && sym->type) {
+            vi.type = sym->type->toString();
+        } else {
+            // Infer type from value
+            const Value& val = slots[i];
+            switch (val.type) {
+                case Value::INT:
+                    vi.type = "int";
+                    break;
+                case Value::FLOAT:
+                    vi.type = "float";
+                    break;
+                case Value::BOOL:
+                    vi.type = "bool";
+                    break;
+                case Value::OBJECT_REF:
+                    if (val.objectRef) {
+                        vi.type = val.objectRef->className;
+                    } else {
+                        vi.type = "object";
+                    }
+                    break;
+                case Value::POINTER:
+                    vi.type = "pointer";
+                    break;
+                case Value::ARRAY:
+                    vi.type = "array";
+                    break;
+                default:
+                    vi.type = "unknown";
+                    break;
+            }
+        }
+        
         vi.value = slots[i].toString();
         out.push_back(vi);
     }

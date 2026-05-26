@@ -16,6 +16,7 @@ public:
     std::string definingClass;  // Which class defined this method
     bool isVirtual;
     
+    MethodDef() = default;
     MethodDef(const std::string& n, std::shared_ptr<FuncDecl> decl, 
               const std::string& cls, bool virt = false);
 };
@@ -28,6 +29,7 @@ public:
     std::map<std::string, MethodDef> methods;  // method_name -> MethodDef
     std::map<std::string, std::string> vtable;  // virtual_method -> actual_class_method
     
+    ClassDef() = default;
     ClassDef(const std::string& n, const std::string& base = "");
     
     void addMember(const std::string& name, std::shared_ptr<Type> type);
@@ -52,8 +54,8 @@ public:
     bool isDefined(const std::string& name) const;
     
     // Inheritance operations
-    std::string getBaseClass(const std::string& className) const;
-    bool isSubclassOf(const std::string& derived, const std::string& base) const;
+    std::string getBaseClass(const std::string& className);
+    bool isSubclassOf(const std::string& derived, const std::string& base);
     
     // Virtual method resolution
     std::string resolveVirtualMethod(const std::string& className, const std::string& methodName) const;

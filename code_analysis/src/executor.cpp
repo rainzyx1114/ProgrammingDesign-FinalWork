@@ -28,7 +28,7 @@ void ExecutorVisitor::executeProgram(const std::shared_ptr<Program>& program) {
 
         program->accept(*this);
         recordSnapshot("program_end");
-        memory->popFrame();
+        // memory->popFrame();
     }
 }
 
@@ -294,12 +294,11 @@ void ExecutorVisitor::visit(MemberAccess& node) {
 
 void ExecutorVisitor::visit(ArrayAccess& node) {
     if (node.array) node.array->accept(*this);
-    Value arrayVal = currentValue;
+    // Value arrayVal = currentValue;
     
     if (node.index) node.index->accept(*this);
-    Value indexVal = currentValue;
+    // Value indexVal = currentValue;
     
-    // Array access (placeholder)
     currentValue = Value();
 }
 
@@ -348,25 +347,24 @@ void ExecutorVisitor::visit(Program& node) {
 }
 
 // Step execution methods
-void ExecutorVisitor::stepInto() {
-    // Implementation for single stepping
-}
+// void ExecutorVisitor::stepInto() {
+//     // Implementation for single stepping
+// }
 
-void ExecutorVisitor::stepOver() {
-    // Implementation for step over
-}
+// void ExecutorVisitor::stepOver() {
+//     // Implementation for step over
+// }
 
-void ExecutorVisitor::stepOut() {
-    // Implementation for step out
-}
+// void ExecutorVisitor::stepOut() {
+//     // Implementation for step out
+// }
 
-void ExecutorVisitor::runUntilBreakpoint(int line) {
-    // Implementation for running to breakpoint
-}
+// void ExecutorVisitor::runUntilBreakpoint(int line) {
+//     // Implementation for running to breakpoint
+// }
 
 // Helper functions
 bool ExecutorVisitor::isTrue(const Value& val) const {
-    // Implementation depends on Value class
     return val.toBool();
 }
 
@@ -478,12 +476,43 @@ std::vector<VariableInfo> ExecutorVisitor::buildVariableInfoForCallFrame(int fra
                 if (sym) vi.name = sym->name;
                 else vi.name = "slot" + std::to_string(slotIndex);
             }
-            if (vi.name.rfind("slot", 0) != 0) {
-                Symbol* sym = symbolTable->lookupByBinding(depth, slotIndex);
-                vi.type = sym && sym->type ? sym->type->toString() : "";
+            
+            // Get type from symbol if available
+            Symbol* sym = symbolTable->lookupByBinding(depth, slotIndex);
+            if (sym && sym->type) {
+                vi.type = sym->type->toString();
             } else {
-                vi.type = "";
+                // Infer type from value if symbol type not available
+                const Value& val = lexicalFrames[depth][slotIndex];
+                switch (val.type) {
+                    case Value::INT:
+                        vi.type = "int";
+                        break;
+                    case Value::FLOAT:
+                        vi.type = "float";
+                        break;
+                    case Value::BOOL:
+                        vi.type = "bool";
+                        break;
+                    case Value::OBJECT_REF:
+                        if (val.objectRef) {
+                            vi.type = val.objectRef->className;
+                        } else {
+                            vi.type = "object";
+                        }
+                        break;
+                    case Value::POINTER:
+                        vi.type = "pointer";
+                        break;
+                    case Value::ARRAY:
+                        vi.type = "array";
+                        break;
+                    default:
+                        vi.type = "unknown";
+                        break;
+                }
             }
+            
             vi.value = lexicalFrames[depth][slotIndex].toString();
             vars.push_back(vi);
         }
@@ -503,8 +532,6 @@ void ExecutorVisitor::recordSnapshot(const std::string& event, int lineNumber) {
     }
     st.currentLine = frame ? frame->lineNumber : 0;
     st.currentFunction = frame ? frame->functionName : std::string();
-    st.isRunning = false;
-    st.isPaused = false;
 
     StackTraceView stv;
     const auto& callStack = memory->getCallStack();
@@ -531,10 +558,51 @@ void ExecutorVisitor::recordSnapshot(const std::string& event, int lineNumber) {
         fv.functionName = "global";
         fv.lineNumber = st.currentLine;
         auto slots = memory->getCurrentLexicalSlots();
+        auto names = memory->getLexicalVariableNames();
         for (size_t i = 0; i < slots.size(); ++i) {
             VariableInfo vi;
-            vi.name = std::string("slot") + std::to_string(i);
-            vi.type = "";
+            if (0 < (int)names.size() && i < names[0].size()) {
+                vi.name = names[0][i];
+            } else {
+                vi.name = std::string("slot") + std::to_string(i);
+            }
+            
+            // Get type from symbol table if available
+            Symbol* sym = symbolTable->lookupByBinding(0, i);
+            if (sym && sym->type) {
+                vi.type = sym->type->toString();
+            } else {
+                // Infer type from value
+                const Value& val = slots[i];
+                switch (val.type) {
+                    case Value::INT:
+                        vi.type = "int";
+                        break;
+                    case Value::FLOAT:
+                        vi.type = "float";
+                        break;
+                    case Value::BOOL:
+                        vi.type = "bool";
+                        break;
+                    case Value::OBJECT_REF:
+                        if (val.objectRef) {
+                            vi.type = val.objectRef->className;
+                        } else {
+                            vi.type = "object";
+                        }
+                        break;
+                    case Value::POINTER:
+                        vi.type = "pointer";
+                        break;
+                    case Value::ARRAY:
+                        vi.type = "array";
+                        break;
+                    default:
+                        vi.type = "unknown";
+                        break;
+                }
+            }
+            
             vi.value = slots[i].toString();
             fv.variables.push_back(vi);
         }
@@ -549,18 +617,33 @@ void ExecutorVisitor::recordSnapshot(const std::string& event, int lineNumber) {
         ov.objectId = kv.first;
         ov.className = kv.second->className;
         ov.baseClass = "";
+        
+        // Get class definition to retrieve member types
+        ClassDef* classDef = classModel->getClass(kv.second->className);
+        
         for (auto& m : kv.second->members) {
             MemberInfo mi;
             mi.name = m.first;
-            mi.type = "";
-            mi.value = m.second.toString();
             mi.isMethod = false;
+            mi.value = m.second.toString();
+            
+            // Get type from class definition
+            if (classDef) {
+                std::shared_ptr<Type> memberType = classDef->getMemberType(m.first);
+                if (memberType) {
+                    mi.type = memberType->toString();
+                } else {
+                    mi.type = "unknown";
+                }
+            } else {
+                mi.type = "unknown";
+            }
+            
             ov.members.push_back(mi);
         }
         objs.push_back(ov);
     }
     st.objectsOnHeap = objs;
-    st.executionLog = "";
     snap.state = st;
     executionTrace.push_back(snap);
 }
@@ -573,21 +656,21 @@ Value Executor::evaluateExpression(const std::shared_ptr<Expr>& expr) {
     return visitor->evaluateExpression(expr);
 }
 
-void Executor::stepInto() {
-    visitor->stepInto();
-}
+// void Executor::stepInto() {
+//     visitor->stepInto();
+// }
 
-void Executor::stepOver() {
-    visitor->stepOver();
-}
+// void Executor::stepOver() {
+//     visitor->stepOver();
+// }
 
-void Executor::stepOut() {
-    visitor->stepOut();
-}
+// void Executor::stepOut() {
+//     visitor->stepOut();
+// }
 
-void Executor::runUntilBreakpoint(int line) {
-    visitor->runUntilBreakpoint(line);
-}
+// void Executor::runUntilBreakpoint(int line) {
+//     visitor->runUntilBreakpoint(line);
+// }
 
 std::shared_ptr<Memory> Executor::getMemory() const {
     return visitor->getMemory();

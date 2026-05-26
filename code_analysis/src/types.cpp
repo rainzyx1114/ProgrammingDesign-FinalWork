@@ -1,8 +1,18 @@
 #include "types.h"
 
 std::string PrimitiveType::toString() const {
-    // Implementation
-    return "";
+    switch (kind) {
+        case INT: return "int";
+        case DOUBLE: return "double";
+        case FLOAT: return "float";
+        case BOOL: return "bool";
+        case CHAR: return "char";
+        case VOID: return "void";
+        case STRING_TYPE: return "string";
+        case STRUCT: return "struct";
+        case CONST: return "const";
+        default: return "unknown";
+    }
 }
 
 bool PrimitiveType::equals(const Type* other) const {

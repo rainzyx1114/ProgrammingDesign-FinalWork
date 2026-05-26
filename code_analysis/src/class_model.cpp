@@ -10,25 +10,34 @@ ClassDef::ClassDef(const std::string& n, const std::string& base)
 }
 
 void ClassDef::addMember(const std::string& name, std::shared_ptr<Type> type) {
-    // Implementation
+    members.push_back(std::make_pair(name, type));
 }
 
 void ClassDef::addMethod(const std::string& name, std::shared_ptr<FuncDecl> decl, bool isVirtual) {
-    // Implementation
+    methods[name] = MethodDef(name, decl, this->name, isVirtual);
 }
 
 bool ClassDef::hasMember(const std::string& name) const {
-    // Implementation
+    for (const auto& p: members) {
+        if (name == p.first) {
+            return true;
+        }
+    }
     return false;
 }
 
 bool ClassDef::hasMethod(const std::string& name) const {
-    // Implementation
-    return false;
+    return methods.find(name) != methods.end();
 }
 
 std::shared_ptr<Type> ClassDef::getMemberType(const std::string& name) const {
-    // Implementation
+    if (hasMember(name)) {
+        for (const auto& p: members) {
+            if (name == p.first) {
+                return p.second;
+            }
+        }
+    }
     return nullptr;
 }
 
@@ -36,16 +45,15 @@ ClassModel::ClassModel() {
 }
 
 void ClassModel::defineClass(const std::string& name, const std::string& baseClass) {
-    // Implementation
+    addClass(ClassDef(name, baseClass));
 }
 
 void ClassModel::addClass(const ClassDef& classDef) {
-    // Implementation
+    classes[classDef.name] = classDef;
 }
 
 ClassDef* ClassModel::getClass(const std::string& name) {
-    // Implementation
-    return nullptr;
+    return &classes[name];
 }
 
 const ClassDef* ClassModel::getClass(const std::string& name) const {
@@ -54,17 +62,21 @@ const ClassDef* ClassModel::getClass(const std::string& name) const {
 }
 
 bool ClassModel::isDefined(const std::string& name) const {
-    // Implementation
-    return false;
+    return classes.find(name) != classes.end();
 }
 
-std::string ClassModel::getBaseClass(const std::string& className) const {
-    // Implementation
-    return "";
+std::string ClassModel::getBaseClass(const std::string& className) {
+    return classes[className].baseClass;
 }
 
-bool ClassModel::isSubclassOf(const std::string& derived, const std::string& base) const {
-    // Implementation
+bool ClassModel::isSubclassOf(const std::string& derived, const std::string& base) {
+    std::string parent = classes[derived].baseClass;
+    while (parent != "") {
+        if (parent == base) {
+            return true;
+        }
+        parent = classes[parent].baseClass;
+    }
     return false;
 }
 
@@ -74,6 +86,5 @@ std::string ClassModel::resolveVirtualMethod(const std::string& className, const
 }
 
 std::shared_ptr<Object> ClassModel::createInstance(const std::string& className) {
-    // Implementation
     return std::make_shared<Object>(className);
 }

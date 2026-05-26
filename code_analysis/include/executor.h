@@ -73,10 +73,10 @@ public:
     Value evaluateExpression(const std::shared_ptr<Expr>& expr);
     
     // Single step execution
-    void stepInto();
-    void stepOver();
-    void stepOut();
-    void runUntilBreakpoint(int line);
+    // void stepInto();
+    // void stepOver();
+    // void stepOut();
+    // void runUntilBreakpoint(int line);
     
     // Query execution state
     std::shared_ptr<Memory> getMemory() const { return memory; }
@@ -122,10 +122,10 @@ public:
     Value evaluateExpression(const std::shared_ptr<Expr>& expr);
     
     // Single step execution
-    void stepInto();
-    void stepOver();
-    void stepOut();
-    void runUntilBreakpoint(int line);
+    // void stepInto();
+    // void stepOver();
+    // void stepOut();
+    // void runUntilBreakpoint(int line);
     
     // Query execution state
     std::shared_ptr<Memory> getMemory() const;
