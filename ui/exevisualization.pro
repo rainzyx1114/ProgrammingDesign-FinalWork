@@ -8,10 +8,12 @@ CONFIG += c++17
 
 SOURCES += \
     main.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    codeeditor.cpp
 
 HEADERS += \
-    mainwindow.h
+    mainwindow.h \
+    codeeditor.h
 
 FORMS += \
     mainwindow.ui
@@ -26,3 +28,35 @@ DISTFILES += \
 
 RESOURCES += \
     res.qrc
+INCLUDEPATH += $$PWD/../code_analysis/include
+DEPENDPATH += $$PWD/../code_analysis/include
+
+# 2. 把队友的所有头文件加进来（用于在 Qt Creator 左侧显示）
+HEADERS += \
+    $$PWD/../code_analysis/include/analyzer.h \
+    $$PWD/../code_analysis/include/ast.h \
+    $$PWD/../code_analysis/include/binding.h \
+    $$PWD/../code_analysis/include/class_model.h \
+    $$PWD/../code_analysis/include/executor.h \
+    $$PWD/../code_analysis/include/lexer.h \
+    $$PWD/../code_analysis/include/memory.h \
+    $$PWD/../code_analysis/include/parser.h \
+    $$PWD/../code_analysis/include/symbol_table.h \
+    $$PWD/../code_analysis/include/type_system.h \
+    $$PWD/../code_analysis/include/types.h \
+    $$PWD/../code_analysis/include/value.h \
+    $$PWD/../code_analysis/include/visualization_data.h
+
+# 3. 把队友的所有源文件加进来参与编译（注意：故意漏掉了 test_runner.cpp）
+SOURCES += \
+    $$PWD/../code_analysis/src/analyzer.cpp \
+    $$PWD/../code_analysis/src/ast.cpp \
+    $$PWD/../code_analysis/src/class_model.cpp \
+    $$PWD/../code_analysis/src/executor.cpp \
+    $$PWD/../code_analysis/src/lexer.cpp \
+    $$PWD/../code_analysis/src/memory.cpp \
+    $$PWD/../code_analysis/src/parser.cpp \
+    $$PWD/../code_analysis/src/symbol_table.cpp \
+    $$PWD/../code_analysis/src/type_system.cpp \
+    $$PWD/../code_analysis/src/types.cpp \
+    $$PWD/../code_analysis/src/value.cpp
