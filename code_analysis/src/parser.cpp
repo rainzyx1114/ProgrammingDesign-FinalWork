@@ -85,11 +85,15 @@ std::shared_ptr<Expr> Parser::finishCall(std::shared_ptr<Expr> callee) {
 }
 
 std::shared_ptr<ASTNode> Parser::declaration() {
+    bool isVirtual = false;
+    if (match(TokenType::VIRTUAL)) {
+        isVirtual = true;
+    }
     if (match({TokenType::INT, TokenType::DOUBLE, TokenType::FLOAT, TokenType::BOOL, TokenType::CHAR, TokenType::VOID, TokenType::STRING_TYPE, TokenType::STRUCT, TokenType::CONST})) {
         Token typeToken = previous();
         Token name = consume(TokenType::IDENTIFIER, "Expect variable name.");
         if (match(TokenType::LEFT_PAREN)) {
-            return functionDeclaration(typeToken, name);
+            return functionDeclaration(typeToken, name, isVirtual);
         } else {
             return variableDeclaration(typeToken, name);
         }
@@ -127,7 +131,7 @@ std::shared_ptr<ClassDecl> Parser::classDeclaration() {
     return std::make_shared<ClassDecl>(name, superclass, std::move(members), std::move(methods));
 }
 
-std::shared_ptr<FuncDecl> Parser::functionDeclaration(Token returnTypeToken, Token name) {
+std::shared_ptr<FuncDecl> Parser::functionDeclaration(Token returnTypeToken, Token name, bool isVirtual) {
     std::vector<std::pair<Token, std::shared_ptr<Type>>> params;
     if (!check(TokenType::RIGHT_PAREN)) {
         do {
@@ -146,7 +150,9 @@ std::shared_ptr<FuncDecl> Parser::functionDeclaration(Token returnTypeToken, Tok
         error("Expect '{' before function body.");
     }
 
-    return std::make_shared<FuncDecl>(name, std::move(params), returnType, body);
+    auto funcDecl = std::make_shared<FuncDecl>(name, std::move(params), returnType, body);
+    funcDecl->isVirtual = isVirtual;
+    return funcDecl;
 }
 
 std::shared_ptr<VarDecl> Parser::variableDeclaration(Token typeToken, Token name) {

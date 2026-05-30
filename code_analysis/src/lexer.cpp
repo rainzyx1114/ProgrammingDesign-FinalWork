@@ -12,6 +12,7 @@ std::unordered_map<std::string, TokenType> Lexer::keywords = {
     {"public", TokenType::PUBLIC},
     {"this", TokenType::THIS},
     {"true", TokenType::TRUE},
+    {"virtual", TokenType::VIRTUAL},
     {"int", TokenType::INT},
     {"double", TokenType::DOUBLE},
     {"bool", TokenType::BOOL},

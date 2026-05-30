@@ -2,7 +2,7 @@
 
 ASTAnalyzer::ASTAnalyzer(std::shared_ptr<SymbolTable> st, std::shared_ptr<TypeSystem> ts,
                          std::shared_ptr<ClassModel> cm)
-    : symbolTable(st), typeSystem(ts), classModel(cm) {}
+    : symbolTable(st), typeSystem(ts), classModel(cm), currentClass(nullptr), insideClassMethod(false) {}
 
 void ASTAnalyzer::visit(BinaryOp& node) {
     if (node.left) node.left->accept(*this);
@@ -90,6 +90,18 @@ void ASTAnalyzer::visit(ReturnStmt& node) {
 }
 
 void ASTAnalyzer::visit(VarDecl& node) {
+    if (currentClass && !insideClassMethod) {
+        if (node.type) {
+            currentClass->addMember(node.name.lexeme, node.type);
+        } else {
+            currentClass->addMember(node.name.lexeme, Type::createType(TokenType::UNKNOWN));
+        }
+        if (node.initializer) {
+            node.initializer->accept(*this);
+        }
+        return;
+    }
+
     // allocate binding for this declaration and attach it to the VarDecl node
     Binding b = symbolTable->declare(node.name.lexeme, node.type, node.name);
     node.binding = b;
@@ -101,8 +113,25 @@ void ASTAnalyzer::visit(VarDecl& node) {
 }
 
 void ASTAnalyzer::visit(FuncDecl& node) {
-    // register function 
-    symbolTable->declareFunction(node.name.lexeme, &node);
+    if (currentClass && !insideClassMethod) {
+        // inherit virtualness from overridden base methods
+        const ClassDef* baseDef = classModel->getClass(currentClass->baseClass);
+        while (baseDef) {
+            auto it = baseDef->methods.find(node.name.lexeme);
+            if (it != baseDef->methods.end() && it->second.isVirtual) {
+                node.isVirtual = true;
+                break;
+            }
+            baseDef = classModel->getClass(baseDef->baseClass);
+        }
+        currentClass->addMethod(node.name.lexeme, std::make_shared<FuncDecl>(node), node.isVirtual);
+    }
+    // register function
+    std::string functionName = node.name.lexeme;
+    if (currentClass) {
+        functionName = currentClass->name + "::" + functionName;
+    }
+    symbolTable->declareFunction(functionName, &node);
     // analyze body in its own scope and bind parameters
     symbolTable->enterScope();
     int level = symbolTable->getCurrentLevel();
@@ -113,18 +142,27 @@ void ASTAnalyzer::visit(FuncDecl& node) {
         symbolTable->markInitialized(p.first.lexeme);
     }
     node.paramSlotCount = symbolTable->getSlotCountForLevel(level);
+    bool previousInside = insideClassMethod;
+    if (currentClass) {
+        insideClassMethod = true;
+    }
     if (node.body) node.body->accept(*this);
+    insideClassMethod = previousInside;
     symbolTable->exitScope();
 }
 
 void ASTAnalyzer::visit(ClassDecl& node) {
     classModel->defineClass(node.name.lexeme, node.baseClass.lexeme);
+    currentClass = classModel->getClass(node.name.lexeme);
+    insideClassMethod = false;
     for (auto& member : node.members) {
         if (member) member->accept(*this);
     }
     for (auto& method : node.methods) {
         if (method) method->accept(*this);
     }
+    currentClass = nullptr;
+    insideClassMethod = false;
 }
 
 void ASTAnalyzer::visit(Program& node) {
@@ -158,10 +196,9 @@ bool CodeAnalyzer::loadCode(const std::string& sourceCode) {
     return false;
 }
 
-std::string CodeAnalyzer::getParseError() const {
-    // Implementation
-    return "";
-}
+// std::string CodeAnalyzer::getParseError() const {
+//     return "";
+// }
 
 void CodeAnalyzer::start() {
     runContinuously();
@@ -186,49 +223,49 @@ void CodeAnalyzer::runContinuously() {
 //    
 // }
 
-ExecutionState CodeAnalyzer::getExecutionState() {
-    ExecutionState st;
-    st.currentLine = getCurrentLine();
-    st.currentFunction = getCurrentFunction();
-    st.stackTrace = getStackTrace();
-    st.objectsOnHeap = getObjectsOnHeap();
-    return st;
-}
+// ExecutionState CodeAnalyzer::getExecutionState() {
+//     ExecutionState st;
+//     st.currentLine = getCurrentLine();
+//     st.currentFunction = getCurrentFunction();
+//     st.stackTrace = getStackTrace();
+//     st.objectsOnHeap = getObjectsOnHeap();
+//     return st;
+// }
 
-StackTraceView CodeAnalyzer::getStackTrace() {
-    StackTraceView stv;
-    const auto& callStack = memory->getCallStack();
-    for (int frameIndex = 0; frameIndex < (int)callStack.size(); ++frameIndex) {
-        auto frame = callStack[frameIndex];
-        StackFrameView sfv;
-        sfv.functionName = frame->functionName;
-        sfv.lineNumber = frame->lineNumber;
-        auto lexicalFrames = memory->getLexicalFramesForCallFrame(frameIndex);
-        auto lexicalNames = memory->getLexicalVariableNamesForCallFrame(frameIndex);
-        int callerDepth = frame->lexicalVariableNames.size();
-        if (callerDepth > 0 && callerDepth < (int)lexicalFrames.size()) {
-            lexicalFrames = std::vector<std::vector<Value>>(lexicalFrames.begin() + callerDepth, lexicalFrames.end());
-        }
-        if (callerDepth > 0 && callerDepth < (int)lexicalNames.size()) {
-            lexicalNames = std::vector<std::vector<std::string>>(lexicalNames.begin() + callerDepth, lexicalNames.end());
-        }
-        for (int depth = 0; depth < (int)lexicalFrames.size(); ++depth) {
-            for (int slot = 0; slot < (int)lexicalFrames[depth].size(); ++slot) {
-                VariableInfo vi;
-                if (depth < (int)lexicalNames.size() && slot < (int)lexicalNames[depth].size()) {
-                    vi.name = lexicalNames[depth][slot];
-                } else {
-                    vi.name = "slot" + std::to_string(slot);
-                }
-                vi.type = "";
-                vi.value = lexicalFrames[depth][slot].toString();
-                sfv.variables.push_back(vi);
-            }
-        }
-        stv.frames.push_back(sfv);
-    }
-    return stv;
-}
+// StackTraceView CodeAnalyzer::getStackTrace() {
+//     StackTraceView stv;
+//     const auto& callStack = memory->getCallStack();
+//     for (int frameIndex = 0; frameIndex < (int)callStack.size(); ++frameIndex) {
+//         auto frame = callStack[frameIndex];
+//         StackFrameView sfv;
+//         sfv.functionName = frame->functionName;
+//         sfv.lineNumber = frame->lineNumber;
+//         auto lexicalFrames = memory->getLexicalFramesForCallFrame(frameIndex);
+//         auto lexicalNames = memory->getLexicalVariableNamesForCallFrame(frameIndex);
+//         int callerDepth = frame->lexicalVariableNames.size();
+//         if (callerDepth > 0 && callerDepth < (int)lexicalFrames.size()) {
+//             lexicalFrames = std::vector<std::vector<Value>>(lexicalFrames.begin() + callerDepth, lexicalFrames.end());
+//         }
+//         if (callerDepth > 0 && callerDepth < (int)lexicalNames.size()) {
+//             lexicalNames = std::vector<std::vector<std::string>>(lexicalNames.begin() + callerDepth, lexicalNames.end());
+//         }
+//         for (int depth = 0; depth < (int)lexicalFrames.size(); ++depth) {
+//             for (int slot = 0; slot < (int)lexicalFrames[depth].size(); ++slot) {
+//                 VariableInfo vi;
+//                 if (depth < (int)lexicalNames.size() && slot < (int)lexicalNames[depth].size()) {
+//                     vi.name = lexicalNames[depth][slot];
+//                 } else {
+//                     vi.name = "slot" + std::to_string(slot);
+//                 }
+//                 vi.type = "";
+//                 vi.value = lexicalFrames[depth][slot].toString();
+//                 sfv.variables.push_back(vi);
+//             }
+//         }
+//         stv.frames.push_back(sfv);
+//     }
+//     return stv;
+// }
 
 std::vector<VariableInfo> CodeAnalyzer::getVariables() {
     std::vector<VariableInfo> out;
@@ -267,12 +304,6 @@ std::vector<VariableInfo> CodeAnalyzer::getVariables() {
                         vi.type = "object";
                     }
                     break;
-                case Value::POINTER:
-                    vi.type = "pointer";
-                    break;
-                case Value::ARRAY:
-                    vi.type = "array";
-                    break;
                 default:
                     vi.type = "unknown";
                     break;
@@ -310,6 +341,64 @@ std::vector<Stepsnapshot> CodeAnalyzer::getExecutionTrace() {
         return executor->getExecutionTrace();
     }
     return {};
+}
+
+std::vector<ClassView> CodeAnalyzer::getAllClassViews() {
+    std::vector<ClassView> cvs;
+    for (const auto& c : classModel->classes) {
+        const ClassDef& classDef = c.second;
+        ClassView cv;
+        cv.classname = classDef.name;
+        cv.baseClass = classDef.baseClass;
+        cv.inheritance_depth = 0;
+        std::string parent = classDef.baseClass;
+        while (!parent.empty()) {
+            cv.inheritance_depth++;
+            parent = classModel->getBaseClass(parent);
+        }
+
+        for (auto& member : classDef.members) {
+            MemberInfo mi;
+            mi.name = member.first;
+            mi.type = member.second ? member.second->toString() : "unknown";
+            mi.value = "";
+            mi.isMethod = false;
+            cv.members.push_back(mi);
+        }
+
+        for (auto& methodPair : classDef.methods) {
+            MemberInfo mi;
+            mi.name = methodPair.first;
+            if (methodPair.second.declaration && methodPair.second.declaration->returnType) {
+                mi.type = methodPair.second.declaration->returnType->toString();
+            } else {
+                mi.type = "void";
+            }
+            mi.value = methodPair.second.isVirtual ? "virtual" : "";
+            mi.isMethod = true;
+            cv.methods.push_back(mi);
+        }
+
+        for (const auto& other : classModel->classes) {
+            if (other.second.baseClass == classDef.name) {
+                cv.derived_classes.push_back(other.second.name);
+            }
+        }
+
+        const ClassDef* current = &classDef;
+        while (current) {
+            for (const auto& methodPair : current->methods) {
+                if (methodPair.second.isVirtual && cv.vtable.find(methodPair.first) == cv.vtable.end()) {
+                    cv.vtable[methodPair.first] = current->name + "::" + methodPair.first;
+                }
+            }
+            if (current->baseClass.empty()) break;
+            current = classModel->getClass(current->baseClass);
+        }
+
+        cvs.push_back(std::move(cv));
+    }
+    return cvs;
 }
 
 int CodeAnalyzer::getCurrentLine() const {

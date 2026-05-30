@@ -19,6 +19,8 @@ private:
     std::shared_ptr<SymbolTable> symbolTable;
     std::shared_ptr<TypeSystem> typeSystem;
     std::shared_ptr<ClassModel> classModel;
+    ClassDef* currentClass;
+    bool insideClassMethod;
 
 public:
     ASTAnalyzer(std::shared_ptr<SymbolTable> st, std::shared_ptr<TypeSystem> ts,
@@ -68,7 +70,7 @@ public:
     
     // Code loading and parsing
     bool loadCode(const std::string& sourceCode);
-    std::string getParseError() const;
+    // std::string getParseError() const;
     
     // Execution control
     void start();
@@ -79,8 +81,8 @@ public:
     bool isRunning() const { return isExecuting; }
     
     // State queries
-    ExecutionState getExecutionState();
-    StackTraceView getStackTrace();
+    // ExecutionState getExecutionState();
+    // StackTraceView getStackTrace();
     std::vector<VariableInfo> getVariables();
     std::vector<ObjectView> getObjectsOnHeap();
     std::vector<Stepsnapshot> getExecutionTrace();

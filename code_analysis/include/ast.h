@@ -185,10 +185,11 @@ public:
     std::vector<std::pair<Token, std::shared_ptr<Type>>> params;
     std::vector<Binding> param_bindings; // analyzer records bindings for params
     int paramSlotCount;
+    bool isVirtual;
     std::shared_ptr<Type> returnType;
     std::shared_ptr<Block> body;
     FuncDecl(Token funcName, std::vector<std::pair<Token, std::shared_ptr<Type>>> parameters, std::shared_ptr<Type> retType, std::shared_ptr<Block> funcBody)
-        : name(std::move(funcName)), params(std::move(parameters)), param_bindings(), paramSlotCount(0), returnType(std::move(retType)), body(std::move(funcBody)) {}
+        : name(std::move(funcName)), params(std::move(parameters)), param_bindings(), paramSlotCount(0), isVirtual(false), returnType(std::move(retType)), body(std::move(funcBody)) {}
     void accept(Visitor& visitor) override;
 };
 

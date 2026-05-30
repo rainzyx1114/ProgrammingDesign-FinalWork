@@ -40,11 +40,10 @@ public:
 };
 
 class ClassModel {
-private:
+public:
     std::map<std::string, ClassDef> classes;
     
-public:
-    ClassModel();
+    ClassModel()=default;
     
     // Class definition operations
     void defineClass(const std::string& name, const std::string& baseClass = "");

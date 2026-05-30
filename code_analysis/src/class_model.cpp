@@ -41,9 +41,6 @@ std::shared_ptr<Type> ClassDef::getMemberType(const std::string& name) const {
     return nullptr;
 }
 
-ClassModel::ClassModel() {
-}
-
 void ClassModel::defineClass(const std::string& name, const std::string& baseClass) {
     addClass(ClassDef(name, baseClass));
 }
@@ -53,12 +50,15 @@ void ClassModel::addClass(const ClassDef& classDef) {
 }
 
 ClassDef* ClassModel::getClass(const std::string& name) {
-    return &classes[name];
+    auto it = classes.find(name);
+    if (it == classes.end()) return nullptr;
+    return &it->second;
 }
 
 const ClassDef* ClassModel::getClass(const std::string& name) const {
-    // Implementation
-    return nullptr;
+    auto it = classes.find(name);
+    if (it == classes.end()) return nullptr;
+    return &it->second;
 }
 
 bool ClassModel::isDefined(const std::string& name) const {
@@ -66,22 +66,42 @@ bool ClassModel::isDefined(const std::string& name) const {
 }
 
 std::string ClassModel::getBaseClass(const std::string& className) {
-    return classes[className].baseClass;
+    auto it = classes.find(className);
+    if (it == classes.end()) return "";
+    return it->second.baseClass;
 }
 
 bool ClassModel::isSubclassOf(const std::string& derived, const std::string& base) {
-    std::string parent = classes[derived].baseClass;
-    while (parent != "") {
+    auto it = classes.find(derived);
+    if (it == classes.end()) return false;
+    std::string parent = it->second.baseClass;
+    while (!parent.empty()) {
         if (parent == base) {
             return true;
         }
-        parent = classes[parent].baseClass;
+        auto parentIt = classes.find(parent);
+        if (parentIt == classes.end()) break;
+        parent = parentIt->second.baseClass;
     }
     return false;
 }
 
 std::string ClassModel::resolveVirtualMethod(const std::string& className, const std::string& methodName) const {
-    // Implementation
+    const ClassDef* current = getClass(className);
+    const ClassDef* lastVirtualOwner = nullptr;
+    while (current) {
+        auto it = current->methods.find(methodName);
+        if (it != current->methods.end()) {
+            if (it->second.isVirtual) {
+                lastVirtualOwner = current;
+            }
+        }
+        if (current->baseClass.empty()) break;
+        current = getClass(current->baseClass);
+    }
+    if (lastVirtualOwner) {
+        return lastVirtualOwner->name + "::" + methodName;
+    }
     return "";
 }
 

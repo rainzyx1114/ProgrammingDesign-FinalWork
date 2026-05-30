@@ -481,37 +481,7 @@ std::vector<VariableInfo> ExecutorVisitor::buildVariableInfoForCallFrame(int fra
             Symbol* sym = symbolTable->lookupByBinding(depth, slotIndex);
             if (sym && sym->type) {
                 vi.type = sym->type->toString();
-            } else {
-                // Infer type from value if symbol type not available
-                const Value& val = lexicalFrames[depth][slotIndex];
-                switch (val.type) {
-                    case Value::INT:
-                        vi.type = "int";
-                        break;
-                    case Value::FLOAT:
-                        vi.type = "float";
-                        break;
-                    case Value::BOOL:
-                        vi.type = "bool";
-                        break;
-                    case Value::OBJECT_REF:
-                        if (val.objectRef) {
-                            vi.type = val.objectRef->className;
-                        } else {
-                            vi.type = "object";
-                        }
-                        break;
-                    case Value::POINTER:
-                        vi.type = "pointer";
-                        break;
-                    case Value::ARRAY:
-                        vi.type = "array";
-                        break;
-                    default:
-                        vi.type = "unknown";
-                        break;
-                }
-            }
+            } 
             
             vi.value = lexicalFrames[depth][slotIndex].toString();
             vars.push_back(vi);
@@ -590,12 +560,6 @@ void ExecutorVisitor::recordSnapshot(const std::string& event, int lineNumber) {
                         } else {
                             vi.type = "object";
                         }
-                        break;
-                    case Value::POINTER:
-                        vi.type = "pointer";
-                        break;
-                    case Value::ARRAY:
-                        vi.type = "array";
                         break;
                     default:
                         vi.type = "unknown";

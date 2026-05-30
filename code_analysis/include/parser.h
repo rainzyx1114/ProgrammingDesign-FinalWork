@@ -34,7 +34,7 @@ private:
     // Parsing methods
     std::shared_ptr<ASTNode> declaration();
     std::shared_ptr<ClassDecl> classDeclaration();
-    std::shared_ptr<FuncDecl> functionDeclaration(Token returnTypeToken, Token name);
+    std::shared_ptr<FuncDecl> functionDeclaration(Token returnTypeToken, Token name, bool isVirtual = false);
     std::shared_ptr<VarDecl> variableDeclaration(Token typeToken, Token name);
     
     std::shared_ptr<Stmt> statement();
