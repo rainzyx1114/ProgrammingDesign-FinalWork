@@ -57,7 +57,7 @@ qrc_*.cpp
 .qmake.stash
 .qmake.cache
 
-# Qt Creator 缓存文件夹 (产生几百个 .idx 文件的罪魁祸首)
+.qtcreator
 .qtc_clangd/
 .clang/
 
