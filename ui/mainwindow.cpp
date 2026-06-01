@@ -284,6 +284,7 @@ void MainWindow::on_start_button_clicked()
     // 4. 加载并执行代码
 	if(!m_analyzer->loadCode(codeText)){
 		qDebug()<<"load code failed";
+        QMessageBox::warning(this,"警告","抱歉，暂时不支持main函数，头文件，以及创建类的对象，请您检查代码后重试");
 		return;
 	}
 	m_analyzer->start();
