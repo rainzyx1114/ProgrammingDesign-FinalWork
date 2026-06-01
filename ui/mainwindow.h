@@ -10,6 +10,7 @@
 #include<QLabel>
 #include"codeeditor.h"
 #include <QColor>
+#include "knowledgebookwidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -39,6 +40,8 @@ private slots:
 	void on_actionlast_triggered();
 	void on_actionFontSize_triggered();
 	void on_actionFontColor_triggered();
+	void on_actionUserGuide_triggered();
+	void on_actionKnowledgeBook_triggered();
 
 
 private:

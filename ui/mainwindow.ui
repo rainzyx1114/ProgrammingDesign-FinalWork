@@ -29,7 +29,7 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>码上搞定pro</string>
   </property>
   <property name="styleSheet">
    <string notr="true">Qwidget#centralwidget{
@@ -321,14 +321,9 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     </property>
     <addaction name="actionFontSize"/>
     <addaction name="actionFontColor"/>
-   </widget>
-   <widget class="QMenu" name="menu_v1falsh">
-    <property name="title">
-     <string>码上搞定v1falsh</string>
-    </property>
+    <addaction name="actionUserGuide"/>
    </widget>
    <addaction name="menuSettings"/>
-   <addaction name="menu_v1falsh"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <widget class="QToolBar" name="toolBar">
@@ -413,6 +408,14 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
   <action name="actionFontColor">
    <property name="text">
     <string>字体颜色</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionUserGuide">
+   <property name="text">
+    <string>用户必读</string>
    </property>
    <property name="menuRole">
     <enum>QAction::MenuRole::NoRole</enum>

@@ -14,6 +14,8 @@
 #include <QColorDialog>
 #include <QFontDialog>
 #include <QTextCharFormat>
+#include <QTextBrowser>
+#include <QPushButton>
 
 // Helper: 将 event 字符串转换为用户友好的描述
 static QString eventToDisplayString(const std::string& event) {
@@ -258,6 +260,11 @@ MainWindow::MainWindow(QWidget *parent)
     if (horizontalSplitter) {
         horizontalSplitter->setSizes(QList<int>() << 768 << 512);
     }
+	QMenu *knowledgeBookMenu = ui->menubar->addMenu(QString::fromUtf8("知识手册"));
+    QAction *actionKnowledgeBook = new QAction(QString::fromUtf8("打开知识手册"), this);
+    actionKnowledgeBook->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_K));
+    knowledgeBookMenu->addAction(actionKnowledgeBook);
+    connect(actionKnowledgeBook, &QAction::triggered, this, &MainWindow::on_actionKnowledgeBook_triggered);
 }
 void MainWindow::on_start_button_clicked() 
 {
@@ -780,4 +787,44 @@ void MainWindow::on_actionFontColor_triggered()
         defaultFmt.setForeground(newColor);
         m_codeEditor->setCurrentCharFormat(defaultFmt);
     }
+}
+void MainWindow::on_actionUserGuide_triggered()
+{
+    QDialog *guideDialog = new QDialog(this);
+    guideDialog->setWindowTitle(QString::fromUtf8("用户必读"));
+    guideDialog->setMinimumSize(500, 400);
+
+    QVBoxLayout *layout = new QVBoxLayout(guideDialog);
+
+    QTextBrowser *contentBrowser = new QTextBrowser(guideDialog);
+    contentBrowser->setOpenExternalLinks(true);
+
+    QString guideContent = QString::fromUtf8(
+        "<h2>欢迎使用 码上搞定pro</h2>"
+        "<hr/>"
+        "<p>1.本产品由码上搞定队开发</p>"
+        "<p>2.本产品由程序可视化界面和错题本构成。程序可视化界面支持变量，栈帧，静态类的可视化，可以分析每一步的状态，红色箭头代表当前的正在执行的语句，绿色箭头代表接下来要执行的语句。既可以用按键控制，也可以直接拖动进度条。当你要重新输入新的程序，直接点击开始状态就会更新。但是对于main函数和类的对象暂时不能兼容（还在持续优化中哦~）</p>"
+        "<p>3.错题本支持自定义错题类型和知识库查询，可通过右键新建,重命名和删除</p>"
+        "<p>4.快捷键：ctrl+首字母。如ctrl+p:previous,ctrl+f:first,ctrl+n:next,ctrl+l:last,ctrl+k:knowledge打开知识库</p>"
+        "<p>最后送上github链接，快快点亮小星星吧！"
+        "<a href='https://github.com/rainzyx1114/ProgrammingDesign-FinalWork'>码上搞定</a>"
+        "</p>"
+    );
+
+    contentBrowser->setHtml(guideContent);
+    layout->addWidget(contentBrowser);
+
+    QPushButton *closeBtn = new QPushButton(QString::fromUtf8("关闭"), guideDialog);
+    connect(closeBtn, &QPushButton::clicked, guideDialog, &QDialog::accept);
+    layout->addWidget(closeBtn);
+
+    guideDialog->setAttribute(Qt::WA_DeleteOnClose);
+    guideDialog->exec();
+}
+
+void MainWindow::on_actionKnowledgeBook_triggered()
+{
+    KnowledgeBookWidget *dialog = new KnowledgeBookWidget(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->exec();
 }

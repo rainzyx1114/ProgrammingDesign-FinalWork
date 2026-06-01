@@ -336,7 +336,7 @@ void KnowledgeBookWidget::scanFolder(const QString &path, QStandardItem *parentI
         name.chop(3);
         QStandardItem *fileItem = new QStandardItem(name);
         fileItem->setData(dir.filePath(mdFile), Qt::UserRole);
-        fileItem->setBackground(QColor(240, 240, 240));
+        // 衬底已取消
         parentItem->appendRow(fileItem);
     }
 }
@@ -590,9 +590,7 @@ void KnowledgeBookWidget::onErrorTreeItemClicked(const QModelIndex &index)
             ui->errorTimeLabel->setText("创建时间：" + time);
 
             // 样式：QLabel 灰底
-            ui->errorTypeLabel->setStyleSheet("QLabel { background-color: #F0F0F0; }");
-            ui->errorKnowledgeLabel->setStyleSheet("QLabel { background-color: #F0F0F0; }");
-            ui->errorTimeLabel->setStyleSheet("QLabel { background-color: #F0F0F0; }");
+            // 衬底已取消
 
             currentErrorMarkdown = body;
             QString dir = QFileInfo(filePath).absolutePath();
@@ -901,7 +899,7 @@ void KnowledgeBookWidget::createKnowledgeItem(bool isKnowledgeBase)
 
     QStandardItem *newItem = new QStandardItem(name);
     newItem->setData(filePath, Qt::UserRole);
-    newItem->setBackground(QColor(240, 240, 240));
+    // 衬底已取消
     categoryItem->appendRow(newItem);
     sortItemChildren(categoryItem);
 
@@ -953,9 +951,7 @@ void KnowledgeBookWidget::createKnowledgeItem(bool isKnowledgeBase)
         }
 
         // 元数据面板样式
-        ui->errorTypeLabel->setStyleSheet("QLabel { background-color: #F0F0F0; }");
-        ui->errorKnowledgeLabel->setStyleSheet("QLabel { background-color: #F0F0F0; }");
-        ui->errorTimeLabel->setStyleSheet("QLabel { background-color: #F0F0F0; }");
+        // 衬底已取消
 
         ui->errorTextEdit->setReadOnly(false);
         ui->errorTextEdit->setFocus();

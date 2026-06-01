@@ -16,20 +16,23 @@ HEADERS += \
     codeeditor.h
 
 FORMS += \
-    mainwindow.ui
+    mainwindow.ui \
+    $$PWD/../knowledgebook/knowledgebookwidget.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
-DISTFILES += \
-    icons/arrow_back_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg
-
+OTHER_FILES += \
+    icons/arrow_back_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg \
 RESOURCES += \
     res.qrc
 INCLUDEPATH += $$PWD/../code_analysis/include
 DEPENDPATH += $$PWD/../code_analysis/include
+
+INCLUDEPATH += $$PWD/../knowledgebook
+DEPENDPATH += $$PWD/../knowledgebook
 
 # 2. 把队友的所有头文件加进来（用于在 Qt Creator 左侧显示）
 HEADERS += \
@@ -45,9 +48,9 @@ HEADERS += \
     $$PWD/../code_analysis/include/type_system.h \
     $$PWD/../code_analysis/include/types.h \
     $$PWD/../code_analysis/include/value.h \
-    $$PWD/../code_analysis/include/visualization_data.h
-
-# 3. 把队友的所有源文件加进来参与编译（注意：故意漏掉了 test_runner.cpp）
+    $$PWD/../code_analysis/include/visualization_data.h \
+    $$PWD/../knowledgebook/knowledgebookwidget.h \
+    $$PWD/../knowledgebook/markdownparser.h
 SOURCES += \
     $$PWD/../code_analysis/src/analyzer.cpp \
     $$PWD/../code_analysis/src/ast.cpp \
@@ -59,4 +62,6 @@ SOURCES += \
     $$PWD/../code_analysis/src/symbol_table.cpp \
     $$PWD/../code_analysis/src/type_system.cpp \
     $$PWD/../code_analysis/src/types.cpp \
-    $$PWD/../code_analysis/src/value.cpp
+    $$PWD/../code_analysis/src/value.cpp \
+    $$PWD/../knowledgebook/knowledgebookwidget.cpp \
+    $$PWD/../knowledgebook/markdownparser.cpp
