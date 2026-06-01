@@ -184,6 +184,11 @@ CodeAnalyzer::CodeAnalyzer()
 bool CodeAnalyzer::loadCode(const std::string& sourceCode) {
     lexer = std::make_shared<Lexer>(sourceCode);
     auto tokens = lexer->tokenize();
+    for (const auto& token : tokens) {
+        if (token.type == TokenType::UNKNOWN) {
+            return false;
+        }
+    }
     parser = std::make_shared<Parser>(tokens);
     program = parser->parse();
     

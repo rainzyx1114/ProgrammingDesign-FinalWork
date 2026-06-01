@@ -11,6 +11,7 @@ class Parser {
 private:
     std::vector<Token> tokens;
     size_t current;
+    bool hadError;
     
 public:
     explicit Parser(const std::vector<Token>& toks);

@@ -1,15 +1,16 @@
 #include "parser.h"
 #include "types.h"
 
-Parser::Parser(const std::vector<Token>& toks):tokens(toks), current(0) {}
+Parser::Parser(const std::vector<Token>& toks):tokens(toks), current(0), hadError(false) {}
 
 std::shared_ptr<Program> Parser::parse() {
     std::vector<std::shared_ptr<ASTNode>> statements;
     while (!isAtEnd()) {
         auto decl = declaration();
-        if (decl) {
-            statements.push_back(decl);
+        if (hadError || !decl) {
+            return nullptr;
         }
+        statements.push_back(decl);
     }
     return std::make_shared<Program>(std::move(statements));
 }
@@ -69,7 +70,9 @@ bool Parser::isAtEnd() const {
 }
 
 Token Parser::error(const std::string& message) {
-    // TODO: add real error reporting/synchronization
+    hadError = true;
+    // Stop parsing immediately by skipping to end of token stream.
+    current = tokens.size() > 0 ? tokens.size() - 1 : 0;
     return Token(TokenType::UNKNOWN, "", peek().lineNumber, peek().columnNumber);
 }
 

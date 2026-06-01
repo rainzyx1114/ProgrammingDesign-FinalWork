@@ -36,9 +36,14 @@ std::vector<Token> Lexer::tokenize() {
     while (!isAtEnd()) {
         start = current;
         Token token = nextToken();
-        if (token.type != TokenType::UNKNOWN) {
+        if (token.type == TokenType::UNKNOWN) {
+            if (token.lexeme.empty()) {
+                continue;
+            }
             tokens.push_back(token);
+            break;
         }
+        tokens.push_back(token);
     }
     tokens.push_back(Token(TokenType::eof, "", lineNumber, columnNumber));
     return tokens;
@@ -98,8 +103,10 @@ Token Lexer::nextToken() {
         default:
             if (std::isdigit(c)) {
                 token = readNumber();
-            }else if (std::isalpha(c) || c == '_') {
+            } else if (std::isalpha(c) || c == '_') {
                 token = readIdentifier();
+            } else {
+                token = makeToken(TokenType::UNKNOWN);
             }
     }
     return token;
