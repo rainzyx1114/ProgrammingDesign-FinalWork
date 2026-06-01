@@ -26,7 +26,25 @@ void ExecutorVisitor::executeProgram(const std::shared_ptr<Program>& program) {
         auto globalNames = buildCurrentLexicalVariableNames();
         memory->pushFrame("global", globalNames);
 
-        program->accept(*this);
+        // Execute global declarations / statements first.
+        bool hasMain = symbolTable->lookupFunction("main") != nullptr;
+        if (hasMain) {
+            for (auto& decl : program->declarations) {
+                if (!decl) continue;
+                if (std::dynamic_pointer_cast<FuncDecl>(decl) || std::dynamic_pointer_cast<ClassDecl>(decl)) {
+                    continue;
+                }
+                decl->accept(*this);
+            }
+
+            // Call main() as program entry point.
+            auto mainVar = std::make_shared<Variable>(Token(TokenType::IDENTIFIER, "main", 0, 0));
+            auto mainCall = std::make_shared<FunctionCall>(mainVar, std::vector<std::shared_ptr<Expr>>());
+            mainCall->accept(*this);
+        } else {
+            program->accept(*this);
+        }
+
         recordSnapshot("program_end");
         // memory->popFrame();
     }

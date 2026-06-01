@@ -189,9 +189,11 @@ std::shared_ptr<Stmt> Parser::statement() {
 std::shared_ptr<Block> Parser::block() {
     std::vector<std::shared_ptr<Stmt>> statements;
     while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
-        auto stmt = statement();
-        if (stmt) {
-            statements.push_back(stmt);
+        auto decl = declaration();
+        if (decl) {
+            if (auto stmt = std::dynamic_pointer_cast<Stmt>(decl)) {
+                statements.push_back(stmt);
+            }
         }
     }
     consume(TokenType::RIGHT_BRACE, "Expect '}' after block.");
