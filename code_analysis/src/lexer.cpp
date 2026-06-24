@@ -7,10 +7,10 @@ std::unordered_map<std::string, TokenType> Lexer::keywords = {
     {"for", TokenType::FOR},
     {"if", TokenType::IF},
     {"NULL", TokenType::NIL},
-    {"print", TokenType::PRINT},
     {"return", TokenType::RETURN},
     {"public", TokenType::PUBLIC},
-    {"this", TokenType::THIS},
+    {"private", TokenType::PRIVATE},
+    {"protected", TokenType::PROTECTED},
     {"true", TokenType::TRUE},
     {"virtual", TokenType::VIRTUAL},
     {"int", TokenType::INT},
@@ -22,7 +22,8 @@ std::unordered_map<std::string, TokenType> Lexer::keywords = {
     {"string", TokenType::STRING_TYPE},
     {"struct", TokenType::STRUCT},
     {"const", TokenType::CONST},
-    {"while", TokenType::WHILE}
+    {"while", TokenType::WHILE},
+    {"new", TokenType::NEW}
 };
 
 Token::Token(TokenType t, const std::string& lex, int line, int col)
@@ -59,11 +60,15 @@ Token Lexer::nextToken() {
         case '}': token = makeToken(TokenType::RIGHT_BRACE); break;
         case ',': token = makeToken(TokenType::COMMA); break;
         case '.': token = makeToken(TokenType::DOT); break;
-        case '-': token = makeToken(TokenType::MINUS); break;
+        case '-':
+            token = makeToken(match('>') ? TokenType::ARROW : TokenType::MINUS);
+            break;
         case '+': token = makeToken(TokenType::PLUS); break;
         case ';': token = makeToken(TokenType::SEMICOLON); break;
         case '*': token = makeToken(TokenType::STAR); break;
         case ':': token = makeToken(TokenType::COLON); break;
+        case '[': token = makeToken(TokenType::LEFT_BRACKET); break;
+        case ']': token = makeToken(TokenType::RIGHT_BRACKET); break;
         case '!':
             token = makeToken(match('=') ? TokenType::BANG_EQUAL : TokenType::BANG);
             break;
@@ -77,7 +82,7 @@ Token Lexer::nextToken() {
             token = makeToken(match('=') ? TokenType::GREATER_EQUAL : TokenType::GREATER);
             break;
         case '&':
-            token = makeToken(match('&') ? TokenType::AND : TokenType::UNKNOWN);
+            token = makeToken(match('&') ? TokenType::AND : TokenType::AMPERSAND);
             break;
         case '|':
             token = makeToken(match('|') ? TokenType::OR : TokenType::UNKNOWN);

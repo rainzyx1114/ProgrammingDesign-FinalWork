@@ -1,8 +1,8 @@
 #include "analyzer.h"
 
-ASTAnalyzer::ASTAnalyzer(std::shared_ptr<SymbolTable> st, std::shared_ptr<TypeSystem> ts,
+ASTAnalyzer::ASTAnalyzer(std::shared_ptr<SymbolTable> st,
                          std::shared_ptr<ClassModel> cm)
-    : symbolTable(st), typeSystem(ts), classModel(cm), currentClass(nullptr), insideClassMethod(false) {}
+    : symbolTable(st), classModel(cm), currentClass(nullptr), insideClassMethod(false) {}
 
 void ASTAnalyzer::visit(BinaryOp& node) {
     if (node.left) node.left->accept(*this);
@@ -37,6 +37,7 @@ void ASTAnalyzer::visit(FunctionCall& node) {
 
 void ASTAnalyzer::visit(MemberAccess& node) {
     if (node.object) node.object->accept(*this);
+    // Type resolution is done at runtime (executor); no static type info to resolve here
 }
 
 void ASTAnalyzer::visit(ArrayAccess& node) {
@@ -44,10 +45,28 @@ void ASTAnalyzer::visit(ArrayAccess& node) {
     if (node.index) node.index->accept(*this);
 }
 
+void ASTAnalyzer::visit(NewExpr& node) {
+    // Verify the class exists in the class model
+    if (!classModel->isDefined(node.className)) {
+        // Class not yet defined; it might be forward-declared or defined later.
+        // For the demo, we allow this and let the executor handle errors.
+    }
+    for (auto& arg : node.args) {
+        if (arg) arg->accept(*this);
+    }
+}
+
 void ASTAnalyzer::visit(Assignment& node) {
     if (node.value) node.value->accept(*this);
-    Symbol* s = symbolTable->lookup(node.name.lexeme);
-    if (s) node.binding = s->binding;
+    // For simple variable assignment, resolve the binding
+    if (!node.target && !node.name.lexeme.empty()) {
+        Symbol* s = symbolTable->lookup(node.name.lexeme);
+        if (s) node.binding = s->binding;
+    }
+    // For member/array assignment (target is set), visit the l-value
+    if (node.target) {
+        node.target->accept(*this);
+    }
     // Check assignment compatibility
 }
 
@@ -92,9 +111,9 @@ void ASTAnalyzer::visit(ReturnStmt& node) {
 void ASTAnalyzer::visit(VarDecl& node) {
     if (currentClass && !insideClassMethod) {
         if (node.type) {
-            currentClass->addMember(node.name.lexeme, node.type);
+            currentClass->addMember(node.name.lexeme, node.type, node.accessLevel);
         } else {
-            currentClass->addMember(node.name.lexeme, Type::createType(TokenType::UNKNOWN));
+            currentClass->addMember(node.name.lexeme, Type::createType(TokenType::UNKNOWN), node.accessLevel);
         }
         if (node.initializer) {
             node.initializer->accept(*this);
@@ -103,12 +122,11 @@ void ASTAnalyzer::visit(VarDecl& node) {
     }
 
     // allocate binding for this declaration and attach it to the VarDecl node
-    Binding b = symbolTable->declare(node.name.lexeme, node.type, node.name);
+    Binding b = symbolTable->declare(node.name.lexeme, node.type);
     node.binding = b;
 
     if (node.initializer) {
         node.initializer->accept(*this);
-        symbolTable->markInitialized(node.name.lexeme);
     }
 }
 
@@ -124,7 +142,7 @@ void ASTAnalyzer::visit(FuncDecl& node) {
             }
             baseDef = classModel->getClass(baseDef->baseClass);
         }
-        currentClass->addMethod(node.name.lexeme, std::make_shared<FuncDecl>(node), node.isVirtual);
+        currentClass->addMethod(node.name.lexeme, std::make_shared<FuncDecl>(node), node.isVirtual, node.accessLevel);
     }
     // register function
     std::string functionName = node.name.lexeme;
@@ -137,9 +155,8 @@ void ASTAnalyzer::visit(FuncDecl& node) {
     int level = symbolTable->getCurrentLevel();
     node.param_bindings.clear();
     for (auto& p : node.params) {
-        Binding b = symbolTable->declare(p.first.lexeme, p.second, p.first);
+        Binding b = symbolTable->declare(p.first.lexeme, p.second);
         node.param_bindings.push_back(b);
-        symbolTable->markInitialized(p.first.lexeme);
     }
     node.paramSlotCount = symbolTable->getSlotCountForLevel(level);
     bool previousInside = insideClassMethod;
@@ -175,10 +192,9 @@ CodeAnalyzer::CodeAnalyzer()
     : isLoaded(false), isExecuting(false) {
     memory = std::make_shared<Memory>();
     symbolTable = std::make_shared<SymbolTable>();
-    typeSystem = std::make_shared<TypeSystem>();
     classModel = std::make_shared<ClassModel>();
-    astAnalyzer = std::make_shared<ASTAnalyzer>(symbolTable, typeSystem, classModel);
-    executor = std::make_shared<Executor>(memory, symbolTable, typeSystem, classModel);
+    astAnalyzer = std::make_shared<ASTAnalyzer>(symbolTable, classModel);
+    executor = std::make_shared<Executor>(memory, symbolTable, classModel);
 }
 
 bool CodeAnalyzer::loadCode(const std::string& sourceCode) {
@@ -201,17 +217,9 @@ bool CodeAnalyzer::loadCode(const std::string& sourceCode) {
     return false;
 }
 
-// std::string CodeAnalyzer::getParseError() const {
-//     return "";
-// }
-
 void CodeAnalyzer::start() {
     runContinuously();
 }
-
-// void CodeAnalyzer::stepExecute() {
-//     
-// }
 
 void CodeAnalyzer::runContinuously() {
     if (!program) return;
@@ -219,58 +227,6 @@ void CodeAnalyzer::runContinuously() {
     executor->executeProgram(program);
     isExecuting = false;
 }
-
-// void CodeAnalyzer::pause() {
-//    
-// }
-
-// void CodeAnalyzer::stop() {
-//    
-// }
-
-// ExecutionState CodeAnalyzer::getExecutionState() {
-//     ExecutionState st;
-//     st.currentLine = getCurrentLine();
-//     st.currentFunction = getCurrentFunction();
-//     st.stackTrace = getStackTrace();
-//     st.objectsOnHeap = getObjectsOnHeap();
-//     return st;
-// }
-
-// StackTraceView CodeAnalyzer::getStackTrace() {
-//     StackTraceView stv;
-//     const auto& callStack = memory->getCallStack();
-//     for (int frameIndex = 0; frameIndex < (int)callStack.size(); ++frameIndex) {
-//         auto frame = callStack[frameIndex];
-//         StackFrameView sfv;
-//         sfv.functionName = frame->functionName;
-//         sfv.lineNumber = frame->lineNumber;
-//         auto lexicalFrames = memory->getLexicalFramesForCallFrame(frameIndex);
-//         auto lexicalNames = memory->getLexicalVariableNamesForCallFrame(frameIndex);
-//         int callerDepth = frame->lexicalVariableNames.size();
-//         if (callerDepth > 0 && callerDepth < (int)lexicalFrames.size()) {
-//             lexicalFrames = std::vector<std::vector<Value>>(lexicalFrames.begin() + callerDepth, lexicalFrames.end());
-//         }
-//         if (callerDepth > 0 && callerDepth < (int)lexicalNames.size()) {
-//             lexicalNames = std::vector<std::vector<std::string>>(lexicalNames.begin() + callerDepth, lexicalNames.end());
-//         }
-//         for (int depth = 0; depth < (int)lexicalFrames.size(); ++depth) {
-//             for (int slot = 0; slot < (int)lexicalFrames[depth].size(); ++slot) {
-//                 VariableInfo vi;
-//                 if (depth < (int)lexicalNames.size() && slot < (int)lexicalNames[depth].size()) {
-//                     vi.name = lexicalNames[depth][slot];
-//                 } else {
-//                     vi.name = "slot" + std::to_string(slot);
-//                 }
-//                 vi.type = "";
-//                 vi.value = lexicalFrames[depth][slot].toString();
-//                 sfv.variables.push_back(vi);
-//             }
-//         }
-//         stv.frames.push_back(sfv);
-//     }
-//     return stv;
-// }
 
 std::vector<VariableInfo> CodeAnalyzer::getVariables() {
     std::vector<VariableInfo> out;
@@ -309,6 +265,9 @@ std::vector<VariableInfo> CodeAnalyzer::getVariables() {
                         vi.type = "object";
                     }
                     break;
+                case Value::POINTER:
+                    vi.type = "pointer";
+                    break;
                 default:
                     vi.type = "unknown";
                     break;
@@ -327,13 +286,22 @@ std::vector<ObjectView> CodeAnalyzer::getObjectsOnHeap() {
         ObjectView ov;
         ov.objectId = kv.first;
         ov.className = kv.second->className;
-        ov.baseClass = "";
+        // Get base class from class model
+        ClassDef* classDef = classModel->getClass(kv.second->className);
+        ov.baseClass = classDef ? classDef->baseClass : "";
         for (auto& m : kv.second->members) {
             MemberInfo mi;
             mi.name = m.first;
             mi.type = "";
             mi.value = m.second.toString();
             mi.isMethod = false;
+            // Look up access level from class definition
+            ClassDef* classDef2 = classModel->getClass(kv.second->className);
+            if (classDef2) {
+                mi.accessLevel = accessLevelToString(classDef2->getMemberAccess(m.first));
+            } else {
+                mi.accessLevel = "private";
+            }
             ov.members.push_back(mi);
         }
         out.push_back(ov);
@@ -364,10 +332,11 @@ std::vector<ClassView> CodeAnalyzer::getAllClassViews() {
 
         for (auto& member : classDef.members) {
             MemberInfo mi;
-            mi.name = member.first;
-            mi.type = member.second ? member.second->toString() : "unknown";
+            mi.name = member.name;
+            mi.type = member.type ? member.type->toString() : "unknown";
             mi.value = "";
             mi.isMethod = false;
+            mi.accessLevel = accessLevelToString(member.accessLevel);
             cv.members.push_back(mi);
         }
 
@@ -381,6 +350,7 @@ std::vector<ClassView> CodeAnalyzer::getAllClassViews() {
             }
             mi.value = methodPair.second.isVirtual ? "virtual" : "";
             mi.isMethod = true;
+            mi.accessLevel = accessLevelToString(methodPair.second.accessLevel);
             cv.methods.push_back(mi);
         }
 

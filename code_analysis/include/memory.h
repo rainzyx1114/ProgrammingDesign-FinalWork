@@ -60,9 +60,14 @@ public:
     void setLexicalVariableName(int binding_depth, int slot_index, const std::string& name);
 
     // Object (heap) operations
-    std::shared_ptr<Object> createObject(const std::string& className);
+    int createObjectReturnId(const std::string& className);
+    int putOnHeap(std::shared_ptr<Object> obj);
     std::shared_ptr<Object> getObject(const std::string& objectId);
+    std::shared_ptr<Object> getObjectById(int id);
     const std::map<std::string, std::shared_ptr<Object>>& getHeap() const;
+
+    // Array operations
+    std::shared_ptr<Object> createArray(int size);
     
     // Frame utilities
     int getFrameCount() const { return callStack.size(); }

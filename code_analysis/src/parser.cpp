@@ -71,7 +71,6 @@ bool Parser::isAtEnd() const {
 
 Token Parser::error(const std::string& message) {
     hadError = true;
-    // Stop parsing immediately by skipping to end of token stream.
     current = tokens.size() > 0 ? tokens.size() - 1 : 0;
     return Token(TokenType::UNKNOWN, "", peek().lineNumber, peek().columnNumber);
 }
@@ -92,18 +91,87 @@ std::shared_ptr<ASTNode> Parser::declaration() {
     if (match(TokenType::VIRTUAL)) {
         isVirtual = true;
     }
-    if (match({TokenType::INT, TokenType::DOUBLE, TokenType::FLOAT, TokenType::BOOL, TokenType::CHAR, TokenType::VOID, TokenType::STRING_TYPE, TokenType::STRUCT, TokenType::CONST})) {
+
+    // Check if this is a type-led declaration (variable or function)
+    // Primitive types always indicate a declaration
+    if (match({TokenType::INT, TokenType::DOUBLE, TokenType::FLOAT, TokenType::BOOL,
+                TokenType::CHAR, TokenType::VOID, TokenType::STRING_TYPE,
+                TokenType::STRUCT, TokenType::CONST})) {
+        // Build the base type from the consumed token
         Token typeToken = previous();
-        Token name = consume(TokenType::IDENTIFIER, "Expect variable name.");
+        std::shared_ptr<Type> type = Type::createType(typeToken.type);
+        // Pointer modifiers (before variable name): int*, int**
+        while (match(TokenType::STAR)) {
+            type = std::make_shared<PointerType>(type);
+        }
+
+        // Consume the variable/function name
+        Token name = consume(TokenType::IDENTIFIER, "Expect variable or function name.");
+
+        // Array modifiers (after variable name): int arr[5], int arr[5][10]
+        while (match(TokenType::LEFT_BRACKET)) {
+            int size = 0;
+            if (!check(TokenType::RIGHT_BRACKET)) {
+                Token sizeToken = consume(TokenType::NUMBER, "Expect array size.");
+                size = std::stoi(sizeToken.lexeme);
+            }
+            consume(TokenType::RIGHT_BRACKET, "Expect ']' after array size.");
+            type = std::make_shared<ArrayType>(type, size);
+        }
+
         if (match(TokenType::LEFT_PAREN)) {
-            return functionDeclaration(typeToken, name, isVirtual);
+            return functionDeclaration(type, name, isVirtual);
         } else {
-            return variableDeclaration(typeToken, name);
+            return variableDeclaration(type, name);
         }
     }
+
+    // Class-type declaration: "ClassName varName" or "ClassName* varName" etc.
+    // Use peek-ahead to distinguish from function calls: "foo(bar);"
+    if (check(TokenType::IDENTIFIER)) {
+        size_t savedPos = current;
+        advance(); // eat the first identifier
+        // If next is IDENTIFIER or STAR → it's a type declaration (ClassName varName or ClassName* varName)
+        // LEFT_BRACKET after IDENTIFIER is an array access, not a type
+        if (check(TokenType::IDENTIFIER) || check(TokenType::STAR)) {
+            // Restore position and parse as type + name
+            current = savedPos;
+            Token typeToken = advance(); // consume the class name
+            std::shared_ptr<Type> type = std::make_shared<ClassType>(typeToken.lexeme);
+
+            // Pointer modifiers (before variable name)
+            while (match(TokenType::STAR)) {
+                type = std::make_shared<PointerType>(type);
+            }
+
+            // Consume variable name
+            Token name = consume(TokenType::IDENTIFIER, "Expect variable name.");
+
+            // Array modifiers (after variable name): ClassName arr[5]
+            while (match(TokenType::LEFT_BRACKET)) {
+                int size = 0;
+                if (!check(TokenType::RIGHT_BRACKET)) {
+                    Token sizeToken = consume(TokenType::NUMBER, "Expect array size.");
+                    size = std::stoi(sizeToken.lexeme);
+                }
+                consume(TokenType::RIGHT_BRACKET, "Expect ']' after array size.");
+                type = std::make_shared<ArrayType>(type, size);
+            }
+
+            if (match(TokenType::LEFT_PAREN)) {
+                return functionDeclaration(type, name, isVirtual);
+            } else {
+                return variableDeclaration(type, name);
+            }
+        }
+        // Not a type declaration — restore and fall through to statement()
+        current = savedPos;
+    }
+
     if (match(TokenType::CLASS)) {
         return classDeclaration();
     }
+
     return statement();
 }
 
@@ -120,12 +188,28 @@ std::shared_ptr<ClassDecl> Parser::classDeclaration() {
     }
     std::vector<std::shared_ptr<VarDecl>> members;
     std::vector<std::shared_ptr<FuncDecl>> methods;
+    AccessLevel currentAccess = AccessLevel::PRIVATE_ACCESS;
     while (!check(TokenType::RIGHT_BRACE) && !isAtEnd()) {
+        // Check for access specifier labels
+        if (match(TokenType::PUBLIC) && match(TokenType::COLON)) {
+            currentAccess = AccessLevel::PUBLIC_ACCESS;
+            continue;
+        }
+        if (match(TokenType::PRIVATE) && match(TokenType::COLON)) {
+            currentAccess = AccessLevel::PRIVATE_ACCESS;
+            continue;
+        }
+        if (match(TokenType::PROTECTED) && match(TokenType::COLON)) {
+            currentAccess = AccessLevel::PROTECTED_ACCESS;
+            continue;
+        }
         auto decl = declaration();
         if (decl) {
             if (auto varDecl = std::dynamic_pointer_cast<VarDecl>(decl)) {
+                varDecl->accessLevel = currentAccess;
                 members.push_back(varDecl);
             } else if (auto funcDecl = std::dynamic_pointer_cast<FuncDecl>(decl)) {
+                funcDecl->accessLevel = currentAccess;
                 methods.push_back(funcDecl);
             }
         }
@@ -134,17 +218,40 @@ std::shared_ptr<ClassDecl> Parser::classDeclaration() {
     return std::make_shared<ClassDecl>(name, superclass, std::move(members), std::move(methods));
 }
 
-std::shared_ptr<FuncDecl> Parser::functionDeclaration(Token returnTypeToken, Token name, bool isVirtual) {
+std::shared_ptr<FuncDecl> Parser::functionDeclaration(std::shared_ptr<Type> returnType, Token name, bool isVirtual) {
     std::vector<std::pair<Token, std::shared_ptr<Type>>> params;
     if (!check(TokenType::RIGHT_PAREN)) {
         do {
-            Token paramTypeToken = consume({TokenType::INT, TokenType::DOUBLE, TokenType::FLOAT, TokenType::BOOL, TokenType::CHAR, TokenType::VOID, TokenType::STRING_TYPE, TokenType::STRUCT, TokenType::CONST}, "Expect parameter type.");
+            Token paramTypeToken = consume({TokenType::INT, TokenType::DOUBLE, TokenType::FLOAT,
+                                             TokenType::BOOL, TokenType::CHAR, TokenType::VOID,
+                                             TokenType::STRING_TYPE, TokenType::STRUCT, TokenType::CONST,
+                                             TokenType::IDENTIFIER},
+                                            "Expect parameter type.");
+            std::shared_ptr<Type> paramType;
+            if (paramTypeToken.type == TokenType::IDENTIFIER) {
+                paramType = std::make_shared<ClassType>(paramTypeToken.lexeme);
+            } else {
+                paramType = Type::createType(paramTypeToken.type);
+            }
+            // Pointer modifiers (before parameter name)
+            while (match(TokenType::STAR)) {
+                paramType = std::make_shared<PointerType>(paramType);
+            }
             Token paramName = consume(TokenType::IDENTIFIER, "Expect parameter name.");
-            params.emplace_back(paramName, Type::createType(paramTypeToken.type));
+            // Array modifiers (after parameter name): int arr[]
+            while (match(TokenType::LEFT_BRACKET)) {
+                int size = 0;
+                if (!check(TokenType::RIGHT_BRACKET)) {
+                    Token sizeToken = consume(TokenType::NUMBER, "Expect array size.");
+                    size = std::stoi(sizeToken.lexeme);
+                }
+                consume(TokenType::RIGHT_BRACKET, "Expect ']' after array size.");
+                paramType = std::make_shared<ArrayType>(paramType, size);
+            }
+            params.emplace_back(paramName, paramType);
         } while (match(TokenType::COMMA));
     }
     consume(TokenType::RIGHT_PAREN, "Expect ')' after parameters.");
-    std::shared_ptr<Type> returnType = Type::createType(returnTypeToken.type);
 
     std::shared_ptr<Block> body = nullptr;
     if (match(TokenType::LEFT_BRACE)) {
@@ -158,13 +265,13 @@ std::shared_ptr<FuncDecl> Parser::functionDeclaration(Token returnTypeToken, Tok
     return funcDecl;
 }
 
-std::shared_ptr<VarDecl> Parser::variableDeclaration(Token typeToken, Token name) {
+std::shared_ptr<VarDecl> Parser::variableDeclaration(std::shared_ptr<Type> type, Token name) {
     std::shared_ptr<Expr> initializer = nullptr;
     if (match(TokenType::EQUAL)) {
         initializer = expression();
     }
     consume(TokenType::SEMICOLON, "Expect ';' after variable declaration.");
-    return std::make_shared<VarDecl>(name, Type::createType(typeToken.type), initializer);
+    return std::make_shared<VarDecl>(name, type, initializer);
 }
 
 std::shared_ptr<Stmt> Parser::statement() {
@@ -225,10 +332,21 @@ std::shared_ptr<ForStmt> Parser::forStatement() {
     std::shared_ptr<ASTNode> initializer;
     if (match(TokenType::SEMICOLON)) {
         initializer = nullptr;
-    } else if (match({TokenType::INT, TokenType::DOUBLE, TokenType::FLOAT, TokenType::BOOL, TokenType::CHAR, TokenType::VOID, TokenType::STRING_TYPE, TokenType::STRUCT, TokenType::CONST})) {
+    } else if (match({TokenType::INT, TokenType::DOUBLE, TokenType::FLOAT, TokenType::BOOL,
+                       TokenType::CHAR, TokenType::VOID, TokenType::STRING_TYPE,
+                       TokenType::STRUCT, TokenType::CONST, TokenType::IDENTIFIER})) {
         Token typeToken = previous();
+        std::shared_ptr<Type> type;
+        if (typeToken.type == TokenType::IDENTIFIER) {
+            type = std::make_shared<ClassType>(typeToken.lexeme);
+        } else {
+            type = Type::createType(typeToken.type);
+        }
+        while (match(TokenType::STAR)) {
+            type = std::make_shared<PointerType>(type);
+        }
         Token name = consume(TokenType::IDENTIFIER, "Expect variable name.");
-        initializer = variableDeclaration(typeToken, name);
+        initializer = variableDeclaration(type, name);
     } else {
         initializer = expressionStatement();
     }
@@ -269,11 +387,15 @@ std::shared_ptr<Expr> Parser::expression() {
 std::shared_ptr<Expr> Parser::assignment() {
     auto expr = logicalOr();
     if (match(TokenType::EQUAL)) {
-        Token equals = previous();
         auto value = assignment();
-        if (std::dynamic_pointer_cast<Variable>(expr)) {
-            Token name = std::dynamic_pointer_cast<Variable>(expr)->name;
-            return std::make_shared<Assignment>(name, value);
+        if (auto var = std::dynamic_pointer_cast<Variable>(expr)) {
+            return std::make_shared<Assignment>(var->name, value);
+        } else if (std::dynamic_pointer_cast<MemberAccess>(expr) ||
+                   std::dynamic_pointer_cast<ArrayAccess>(expr)) {
+            // l-value is a member or array access
+            auto assign = std::make_shared<Assignment>(Token(TokenType::UNKNOWN, "", 0, 0), value);
+            assign->target = expr;
+            return assign;
         }
     }
     return expr;
@@ -340,7 +462,7 @@ std::shared_ptr<Expr> Parser::factor() {
 }
 
 std::shared_ptr<Expr> Parser::unary() {
-    if (match({TokenType::BANG, TokenType::MINUS})) {
+    if (match({TokenType::BANG, TokenType::MINUS, TokenType::AMPERSAND, TokenType::STAR})) {
         Token op = previous();
         auto right = unary();
         return std::make_shared<UnaryOp>(op, right);
@@ -353,6 +475,16 @@ std::shared_ptr<Expr> Parser::call() {
     while (true) {
         if (match(TokenType::LEFT_PAREN)) {
             expr = finishCall(expr);
+        } else if (match(TokenType::DOT)) {
+            Token memberName = consume(TokenType::IDENTIFIER, "Expect member name after '.'.");
+            expr = std::make_shared<MemberAccess>(expr, memberName.lexeme, false);
+        } else if (match(TokenType::ARROW)) {
+            Token memberName = consume(TokenType::IDENTIFIER, "Expect member name after '->'.");
+            expr = std::make_shared<MemberAccess>(expr, memberName.lexeme, true);
+        } else if (match(TokenType::LEFT_BRACKET)) {
+            auto index = expression();
+            consume(TokenType::RIGHT_BRACKET, "Expect ']' after index.");
+            expr = std::make_shared<ArrayAccess>(expr, index);
         } else {
             break;
         }
@@ -371,6 +503,19 @@ std::shared_ptr<Expr> Parser::primary() {
         auto expr = expression();
         consume(TokenType::RIGHT_PAREN, "Expect ')' after expression.");
         return expr;
+    }
+    if (match(TokenType::NEW)) {
+        Token className = consume(TokenType::IDENTIFIER, "Expect class name after 'new'.");
+        std::vector<std::shared_ptr<Expr>> args;
+        if (match(TokenType::LEFT_PAREN)) {
+            if (!check(TokenType::RIGHT_PAREN)) {
+                do {
+                    args.push_back(expression());
+                } while (match(TokenType::COMMA));
+            }
+            consume(TokenType::RIGHT_PAREN, "Expect ')' after constructor arguments.");
+        }
+        return std::make_shared<NewExpr>(className.lexeme, std::move(args));
     }
     if (match(TokenType::IDENTIFIER)) {
         return std::make_shared<Variable>(previous());

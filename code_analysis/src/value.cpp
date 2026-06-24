@@ -20,13 +20,25 @@ Value::Value(std::shared_ptr<Object> obj)
     : type(OBJECT_REF), intVal(0), floatVal(0.0f), boolVal(false), objectRef(obj) {
 }
 
+Value Value::pointerFromId(int heapObjId) {
+    Value v;
+    v.type = POINTER;
+    v.intVal = heapObjId;
+    return v;
+}
+
+int Value::getPointerId() const {
+    return intVal;
+}
+
 std::string Value::toString() const {
     switch (type) {
         case UNINITIALIZED: return "uninitialized";
         case INT: return std::to_string(intVal);
         case FLOAT: return std::to_string(floatVal);
         case BOOL: return boolVal ? "true" : "false";
-        case OBJECT_REF: return "object_ref(" + (objectRef ? objectRef->className : std::string("null")) + ")";
+        case OBJECT_REF: return "object(" + (objectRef ? objectRef->className : std::string("null")) + ")";
+        case POINTER: return "ptr->obj" + std::to_string(intVal);
         default: return "";
     }
 }

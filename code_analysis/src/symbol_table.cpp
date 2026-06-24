@@ -3,12 +3,8 @@
 #include <stdexcept>
 
 Symbol::Symbol(const std::string& n, std::shared_ptr<Type> t, int level)
-    : name(n), type(t), scopeLevel(level), isInitialized(false) {
+    : name(n), type(t), scopeLevel(level) {
 }
-
-Symbol::Symbol(const std::string& n, std::shared_ptr<Type> t, int level, bool initialized)
-    : name(n), type(t), scopeLevel(level), isInitialized(initialized) {
-    }
 
 SymbolTable::SymbolTable()
     : currentLevel(0) {
@@ -29,7 +25,7 @@ void SymbolTable::exitScope() {
     currentLevel --;
 }
 
-Binding SymbolTable::declare(const std::string& name, std::shared_ptr<Type> type, const Token& token) {
+Binding SymbolTable::declare(const std::string& name, std::shared_ptr<Type> type) {
     int slot = nextSlotIndexPerScope.back();
     nextSlotIndexPerScope.back() = slot + 1;
     scopes.back()[name] = Symbol(name, type, currentLevel);
@@ -37,7 +33,6 @@ Binding SymbolTable::declare(const std::string& name, std::shared_ptr<Type> type
     Binding b;
     b.scope_depth = currentLevel;
     b.slot_index = slot;
-    b.storage_class = 0;
     b.type = type;
     // record binding into symbol as well
     scopes.back()[name].binding = b;
@@ -61,11 +56,6 @@ Symbol* SymbolTable::lookupLocal(const std::string& name, int level) {
         return &scopes[level][name];
     }
     return nullptr;
-}
-
-void SymbolTable::markInitialized(const std::string& name) {
-    auto s = lookup(name);
-    if (s) s->isInitialized = true;
 }
 
 bool SymbolTable::isDeclared(const std::string& name) {

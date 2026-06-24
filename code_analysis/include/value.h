@@ -15,8 +15,7 @@ public:
         FLOAT,
         BOOL,
         OBJECT_REF,
-        POINTER,
-        ARRAY
+        POINTER
     };
     
     Type type;
@@ -24,13 +23,16 @@ public:
     float floatVal;
     bool boolVal;
     std::shared_ptr<Object> objectRef;
-    std::shared_ptr<void> pointerVal;
-    
+
     Value();
     explicit Value(int i);
     explicit Value(float f);
     explicit Value(bool b);
     explicit Value(std::shared_ptr<Object> obj);
+
+    // Create a pointer value from a heap object ID
+    static Value pointerFromId(int heapObjId);
+    int getPointerId() const;
     
     std::string toString() const;
     int toInt() const;

@@ -9,17 +9,18 @@ ClassDef::ClassDef(const std::string& n, const std::string& base)
     : name(n), baseClass(base) {
 }
 
-void ClassDef::addMember(const std::string& name, std::shared_ptr<Type> type) {
-    members.push_back(std::make_pair(name, type));
+void ClassDef::addMember(const std::string& name, std::shared_ptr<Type> type, AccessLevel access) {
+    members.push_back({name, type, access});
 }
 
-void ClassDef::addMethod(const std::string& name, std::shared_ptr<FuncDecl> decl, bool isVirtual) {
-    methods[name] = MethodDef(name, decl, this->name, isVirtual);
+void ClassDef::addMethod(const std::string& name, std::shared_ptr<FuncDecl> decl, bool isVirtual, AccessLevel access) {
+    auto& m = methods[name] = MethodDef(name, decl, this->name, isVirtual);
+    m.accessLevel = access;
 }
 
 bool ClassDef::hasMember(const std::string& name) const {
-    for (const auto& p: members) {
-        if (name == p.first) {
+    for (const auto& m: members) {
+        if (name == m.name) {
             return true;
         }
     }
@@ -31,14 +32,29 @@ bool ClassDef::hasMethod(const std::string& name) const {
 }
 
 std::shared_ptr<Type> ClassDef::getMemberType(const std::string& name) const {
-    if (hasMember(name)) {
-        for (const auto& p: members) {
-            if (name == p.first) {
-                return p.second;
-            }
+    for (const auto& m: members) {
+        if (name == m.name) {
+            return m.type;
         }
     }
     return nullptr;
+}
+
+AccessLevel ClassDef::getMemberAccess(const std::string& name) const {
+    for (const auto& m: members) {
+        if (name == m.name) {
+            return m.accessLevel;
+        }
+    }
+    return AccessLevel::PRIVATE_ACCESS;
+}
+
+AccessLevel ClassDef::getMethodAccess(const std::string& name) const {
+    auto it = methods.find(name);
+    if (it != methods.end()) {
+        return it->second.accessLevel;
+    }
+    return AccessLevel::PRIVATE_ACCESS;
 }
 
 void ClassModel::defineClass(const std::string& name, const std::string& baseClass) {
@@ -106,5 +122,25 @@ std::string ClassModel::resolveVirtualMethod(const std::string& className, const
 }
 
 std::shared_ptr<Object> ClassModel::createInstance(const std::string& className) {
-    return std::make_shared<Object>(className);
+    auto obj = std::make_shared<Object>(className);
+    const ClassDef* def = getClass(className);
+    if (def) {
+        // Initialize members from this class's definition
+        for (auto& member : def->members) {
+            obj->setMember(member.name, Value(0));
+        }
+        // Also include inherited members
+        std::string base = def->baseClass;
+        while (!base.empty()) {
+            const ClassDef* baseDef = getClass(base);
+            if (!baseDef) break;
+            for (auto& member : baseDef->members) {
+                if (obj->members.find(member.name) == obj->members.end()) {
+                    obj->setMember(member.name, Value(0));
+                }
+            }
+            base = baseDef->baseClass;
+        }
+    }
+    return obj;
 }

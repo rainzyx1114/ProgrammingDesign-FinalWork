@@ -10,8 +10,6 @@ struct VariableInfo {
     std::string name;
     std::string type;
     std::string value;
-    // bool isPointer;
-    // std::string pointsTo;
     VariableInfo(const std::string n, const std::string t, const std::string v):name(n), type(t), value(v){}
     VariableInfo() = default;
 };
@@ -30,6 +28,7 @@ struct MemberInfo {
     std::string type;
     std::string value;
     bool isMethod;
+    std::string accessLevel;
 };
 
 struct ClassView {

@@ -33,6 +33,10 @@ void ArrayAccess::accept(Visitor& visitor) {
     visitor.visit(*this);
 }
 
+void NewExpr::accept(Visitor& visitor) {
+    visitor.visit(*this);
+}
+
 void Assignment::accept(Visitor& visitor) {
     visitor.visit(*this);
 }

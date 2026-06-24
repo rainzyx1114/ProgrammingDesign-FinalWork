@@ -8,7 +8,6 @@
 #include "ast.h"
 #include "memory.h"
 #include "symbol_table.h"
-#include "type_system.h"
 #include "value.h"
 #include "visualization_data.h"
 
@@ -24,7 +23,6 @@ class ExecutorVisitor : public Visitor {
 private:
     std::shared_ptr<Memory> memory;
     std::shared_ptr<SymbolTable> symbolTable;
-    std::shared_ptr<TypeSystem> typeSystem;
     std::shared_ptr<ClassModel> classModel;
     
     ExecutionMode mode;
@@ -33,14 +31,10 @@ private:
     bool shouldReturn;
     Value returnValue;
     int nextLineToExecute;
-    
-    // Execution stack for nested calls
-    std::stack<std::shared_ptr<ASTNode>> callStack;
-    
+
 public:
     ExecutorVisitor(std::shared_ptr<Memory> mem,
                    std::shared_ptr<SymbolTable> sym,
-                   std::shared_ptr<TypeSystem> types,
                    std::shared_ptr<ClassModel> cls);
     
     // Visitor methods for statements
@@ -60,6 +54,7 @@ public:
     void visit(FunctionCall& node) override;
     void visit(MemberAccess& node) override;
     void visit(ArrayAccess& node) override;
+    void visit(NewExpr& node) override;
     void visit(Assignment& node) override;
     
     // Visitor methods for declarations
@@ -71,12 +66,6 @@ public:
     // Public interface methods
     void executeProgram(const std::shared_ptr<Program>& program);
     Value evaluateExpression(const std::shared_ptr<Expr>& expr);
-    
-    // Single step execution
-    // void stepInto();
-    // void stepOver();
-    // void stepOut();
-    // void runUntilBreakpoint(int line);
     
     // Query execution state
     std::shared_ptr<Memory> getMemory() const { return memory; }
@@ -117,18 +106,11 @@ private:
 public:
     Executor(std::shared_ptr<Memory> mem,
              std::shared_ptr<SymbolTable> sym,
-             std::shared_ptr<TypeSystem> types,
              std::shared_ptr<ClassModel> cls);
     
     // Execution control
     void executeProgram(const std::shared_ptr<Program>& program);
     Value evaluateExpression(const std::shared_ptr<Expr>& expr);
-    
-    // Single step execution
-    // void stepInto();
-    // void stepOver();
-    // void stepOut();
-    // void runUntilBreakpoint(int line);
     
     // Query execution state
     std::shared_ptr<Memory> getMemory() const;

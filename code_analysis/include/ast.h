@@ -7,6 +7,12 @@
 #include "lexer.h"
 #include "binding.h"
 
+enum class AccessLevel {
+    PUBLIC_ACCESS,
+    PRIVATE_ACCESS,
+    PROTECTED_ACCESS
+};
+
 class Type;
 class Expr;
 class Stmt;
@@ -85,6 +91,8 @@ public:
     std::shared_ptr<Expr> object;
     std::string member;
     bool isPointer;
+    MemberAccess(std::shared_ptr<Expr> obj, const std::string& mem, bool ptr = false)
+        : object(std::move(obj)), member(mem), isPointer(ptr) {}
     void accept(Visitor& visitor) override;
 };
 
@@ -92,15 +100,27 @@ class ArrayAccess : public Expr {
 public:
     std::shared_ptr<Expr> array;
     std::shared_ptr<Expr> index;
+    ArrayAccess(std::shared_ptr<Expr> arr, std::shared_ptr<Expr> idx)
+        : array(std::move(arr)), index(std::move(idx)) {}
+    void accept(Visitor& visitor) override;
+};
+
+class NewExpr : public Expr {
+public:
+    std::string className;
+    std::vector<std::shared_ptr<Expr>> args;
+    NewExpr(const std::string& cls, std::vector<std::shared_ptr<Expr>> a)
+        : className(cls), args(std::move(a)) {}
     void accept(Visitor& visitor) override;
 };
 
 class Assignment : public Expr {
 public:
     Token name;
-    Binding binding; // analyzer fills this
+    Binding binding; // analyzer fills this (for simple variable assignment)
     std::shared_ptr<Expr> value;
-    Assignment(Token nam, std::shared_ptr<Expr> val):name(std::move(nam)), binding(), value(std::move(val)) {}
+    std::shared_ptr<Expr> target; // for member/array l-value assignment
+    Assignment(Token nam, std::shared_ptr<Expr> val):name(std::move(nam)), binding(), value(std::move(val)), target(nullptr) {}
     void accept(Visitor& visitor) override;
 };
 
@@ -174,6 +194,7 @@ public:
     Binding binding; // analyzer records slot for this declaration
     std::shared_ptr<Type> type;
     std::shared_ptr<Expr> initializer;
+    AccessLevel accessLevel = AccessLevel::PRIVATE_ACCESS;
     VarDecl(Token varName, std::shared_ptr<Type> varType, std::shared_ptr<Expr> init)
         : name(std::move(varName)), binding(), type(std::move(varType)), initializer(std::move(init)) {}
     void accept(Visitor& visitor) override;
@@ -186,6 +207,7 @@ public:
     std::vector<Binding> param_bindings; // analyzer records bindings for params
     int paramSlotCount;
     bool isVirtual;
+    AccessLevel accessLevel = AccessLevel::PRIVATE_ACCESS;
     std::shared_ptr<Type> returnType;
     std::shared_ptr<Block> body;
     FuncDecl(Token funcName, std::vector<std::pair<Token, std::shared_ptr<Type>>> parameters, std::shared_ptr<Type> retType, std::shared_ptr<Block> funcBody)
@@ -224,6 +246,7 @@ public:
     virtual void visit(FunctionCall& node) = 0;
     virtual void visit(MemberAccess& node) = 0;
     virtual void visit(ArrayAccess& node) = 0;
+    virtual void visit(NewExpr& node) = 0;
     virtual void visit(Assignment& node) = 0;
     virtual void visit(ExprStmt& node) = 0;
     virtual void visit(Block& node) = 0;

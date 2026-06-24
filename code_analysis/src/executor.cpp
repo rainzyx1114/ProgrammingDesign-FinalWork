@@ -3,17 +3,15 @@
 
 ExecutorVisitor::ExecutorVisitor(std::shared_ptr<Memory> mem,
                                std::shared_ptr<SymbolTable> sym,
-                               std::shared_ptr<TypeSystem> types,
                                std::shared_ptr<ClassModel> cls)
-    : memory(mem), symbolTable(sym), typeSystem(types), classModel(cls),
+    : memory(mem), symbolTable(sym), classModel(cls),
       mode(ExecutionMode::PAUSED), shouldBreak(false), shouldContinue(false), shouldReturn(false), nextLineToExecute(0) {
 }
 
 Executor::Executor(std::shared_ptr<Memory> mem,
                    std::shared_ptr<SymbolTable> sym,
-                   std::shared_ptr<TypeSystem> types,
                    std::shared_ptr<ClassModel> cls)
-    : visitor(std::make_shared<ExecutorVisitor>(mem, sym, types, cls)) {
+    : visitor(std::make_shared<ExecutorVisitor>(mem, sym, cls)) {
 }
 
 void ExecutorVisitor::executeProgram(const std::shared_ptr<Program>& program) {
@@ -46,7 +44,6 @@ void ExecutorVisitor::executeProgram(const std::shared_ptr<Program>& program) {
         }
 
         recordSnapshot("program_end");
-        // memory->popFrame();
     }
 }
 
@@ -246,11 +243,53 @@ void ExecutorVisitor::visit(FunctionCall& node) {
         }
     }
 
-    // resolve function declaration
+    // Resolve function declaration
     FuncDecl* fdecl = nullptr;
     int callLine = 0;
+    std::string actualClassName; // for virtual dispatch
+
     if (node.name) {
-        if (auto var = dynamic_cast<Variable*>(node.name.get())) {
+        if (auto ma = dynamic_cast<MemberAccess*>(node.name.get())) {
+            // Method call: obj.method() or ptr->method()
+            // Evaluate the object to get its runtime type
+            ma->object->accept(*this);
+            Value objVal = currentValue;
+
+            // Determine the actual class name from the runtime object
+            if (ma->isPointer) {
+                int objId = objVal.getPointerId();
+                auto obj = memory->getObjectById(objId);
+                if (obj) {
+                    actualClassName = obj->className;
+                }
+            } else {
+                if (objVal.objectRef) {
+                    actualClassName = objVal.objectRef->className;
+                }
+            }
+
+            if (!actualClassName.empty()) {
+                // Check for virtual dispatch
+                std::string resolved = classModel->resolveVirtualMethod(actualClassName, ma->member);
+                if (!resolved.empty()) {
+                    // Virtual method: look up the resolved implementation
+                    fdecl = symbolTable->lookupFunction(resolved);
+                }
+                if (!fdecl) {
+                    // Non-virtual or not found via virtual dispatch:
+                    // look up ClassName::methodName
+                    fdecl = symbolTable->lookupFunction(actualClassName + "::" + ma->member);
+                }
+                // Also try the method name directly (for global-like methods)
+                if (!fdecl) {
+                    fdecl = symbolTable->lookupFunction(ma->member);
+                }
+            }
+            if (auto var = dynamic_cast<Variable*>(ma->object.get())) {
+                callLine = var->name.lineNumber;
+            }
+        } else if (auto var = dynamic_cast<Variable*>(node.name.get())) {
+            // Standalone function call: foo()
             fdecl = symbolTable->lookupFunction(var->name.lexeme);
             callLine = var->name.lineNumber;
         }
@@ -306,31 +345,103 @@ void ExecutorVisitor::visit(FunctionCall& node) {
 
 void ExecutorVisitor::visit(MemberAccess& node) {
     if (node.object) node.object->accept(*this);
-    // Access member (placeholder)
-    currentValue = Value();
+    Value objVal = currentValue;
+
+    if (node.isPointer) {
+        // objVal is a POINTER; dereference to get the heap object
+        int objId = objVal.getPointerId();
+        auto obj = memory->getObjectById(objId);
+        if (obj) {
+            currentValue = obj->getMember(node.member);
+        } else {
+            currentValue = Value();
+        }
+    } else {
+        // objVal should be an OBJECT_REF
+        if (objVal.objectRef) {
+            currentValue = objVal.objectRef->getMember(node.member);
+        } else {
+            currentValue = Value();
+        }
+    }
 }
 
 void ExecutorVisitor::visit(ArrayAccess& node) {
     if (node.array) node.array->accept(*this);
-    // Value arrayVal = currentValue;
-    
+    Value arrVal = currentValue;
+
     if (node.index) node.index->accept(*this);
-    // Value indexVal = currentValue;
-    
-    currentValue = Value();
+    int idx = currentValue.toInt();
+
+    // Arrays are stored as heap objects with numeric member names
+    if (arrVal.type == Value::OBJECT_REF && arrVal.objectRef) {
+        currentValue = arrVal.objectRef->getMember(std::to_string(idx));
+    } else {
+        currentValue = Value();
+    }
+}
+
+void ExecutorVisitor::visit(NewExpr& node) {
+    // Create an instance with default-initialized members and put directly on heap
+    auto instance = classModel->createInstance(node.className);
+    int objId = memory->putOnHeap(instance);
+    // Return a pointer value (the heap object ID)
+    currentValue = Value::pointerFromId(objId);
+    recordSnapshot("var_decl");
 }
 
 void ExecutorVisitor::visit(Assignment& node) {
     if (node.value) node.value->accept(*this);
     Value val = currentValue;
-    if (node.binding.type) {
+
+    if (node.target) {
+        // l-value is a member access or array access
+        if (auto ma = dynamic_cast<MemberAccess*>(node.target.get())) {
+            // Evaluate the object expression
+            ma->object->accept(*this);
+            Value objVal = currentValue;
+
+            if (ma->isPointer) {
+                int objId = objVal.getPointerId();
+                auto obj = memory->getObjectById(objId);
+                if (obj) {
+                    obj->setMember(ma->member, val);
+                }
+            } else {
+                if (objVal.objectRef) {
+                    objVal.objectRef->setMember(ma->member, val);
+                }
+            }
+        } else if (auto aa = dynamic_cast<ArrayAccess*>(node.target.get())) {
+            // Evaluate the array expression
+            aa->array->accept(*this);
+            Value arrVal = currentValue;
+
+            // Evaluate the index
+            aa->index->accept(*this);
+            int idx = currentValue.toInt();
+
+            if (arrVal.type == Value::OBJECT_REF && arrVal.objectRef) {
+                arrVal.objectRef->setMember(std::to_string(idx), val);
+            }
+        }
+    } else if (node.binding.type) {
+        // Simple variable assignment (existing path)
         memory->setByBinding(node.binding.scope_depth, node.binding.slot_index, val);
-    } else {
-        // no binding: ignore
     }
+
     currentValue = val;
     // record trace
-    recordSnapshot("assignment", node.name.lineNumber);
+    int lineNum = node.name.lineNumber;
+    if (lineNum == 0 && node.target) {
+        // Try to get line from the target expression
+        if (auto ma = dynamic_cast<MemberAccess*>(node.target.get())) {
+            if (auto var = dynamic_cast<Variable*>(ma->object.get())) {
+                lineNum = var->name.lineNumber;
+            }
+        }
+    }
+    recordSnapshot("assignment", lineNum);
 }
 
 // Declaration visitors
@@ -340,6 +451,17 @@ void ExecutorVisitor::visit(VarDecl& node) {
         node.initializer->accept(*this);
         initialValue = currentValue;
     }
+
+    // Handle array type: allocate heap storage for the array
+    if (node.type) {
+        if (auto arrType = dynamic_cast<ArrayType*>(node.type.get())) {
+            int size = arrType->size;
+            if (size <= 0) size = 1; // default size for unspecified arrays
+            auto arrObj = memory->createArray(size);
+            initialValue = Value(arrObj);
+        }
+    }
+
     if (node.binding.type) {
         memory->setByBinding(node.binding.scope_depth, node.binding.slot_index, initialValue);
         memory->setLexicalVariableName(node.binding.scope_depth, node.binding.slot_index, node.name.lexeme);
@@ -363,23 +485,6 @@ void ExecutorVisitor::visit(Program& node) {
         }
     }
 }
-
-// Step execution methods
-// void ExecutorVisitor::stepInto() {
-//     // Implementation for single stepping
-// }
-
-// void ExecutorVisitor::stepOver() {
-//     // Implementation for step over
-// }
-
-// void ExecutorVisitor::stepOut() {
-//     // Implementation for step out
-// }
-
-// void ExecutorVisitor::runUntilBreakpoint(int line) {
-//     // Implementation for running to breakpoint
-// }
 
 // Helper functions
 bool ExecutorVisitor::isTrue(const Value& val) const {
@@ -471,8 +576,37 @@ Value ExecutorVisitor::applyUnaryOp(const std::string& op, const Value& val) {
         }
     } else if (op == "!") {
         return Value(!val.toBool());
+    } else if (op == "*") {
+        // Dereference: if val is POINTER, retrieve the heap object
+        if (val.type == Value::POINTER) {
+            int objId = val.getPointerId();
+            auto obj = memory->getObjectById(objId);
+            if (obj) {
+                Value result(obj);
+                result.type = Value::OBJECT_REF;
+                return result;
+            }
+        }
+        return Value();
+    } else if (op == "&") {
+        // Address-of: for objects, return the pointer (heap ID)
+        // For the demo, objects arrive as OBJECT_REF; we need their heap ID
+        if (val.type == Value::OBJECT_REF && val.objectRef) {
+            // Search the heap for this object to find its ID
+            for (auto& kv : memory->getHeap()) {
+                if (kv.second == val.objectRef) {
+                    // Extract numeric ID from key "objN"
+                    std::string key = kv.first;
+                    if (key.size() > 3 && key.substr(0, 3) == "obj") {
+                        int id = std::stoi(key.substr(3));
+                        return Value::pointerFromId(id);
+                    }
+                }
+            }
+        }
+        return Value();
     }
-    
+
     return val; // Default case
 }
 
@@ -525,6 +659,8 @@ std::string ExecutorVisitor::inferValueType(const Value& value) const {
             } else {
                 return "object";
             }
+        case Value::POINTER:
+            return "pointer";
         default:
             return "unknown";
     }
@@ -618,18 +754,33 @@ void ExecutorVisitor::recordSnapshot(const std::string& event, int lineNumber, c
         ObjectView ov;
         ov.objectId = kv.first;
         ov.className = kv.second->className;
-        ov.baseClass = "";
-        
-        // Get class definition to retrieve member types
+
+        // Get class definition to retrieve member types and base class
         ClassDef* classDef = classModel->getClass(kv.second->className);
-        
+        if (classDef) {
+            ov.baseClass = classDef->baseClass;
+            // Build vtable for this object's class
+            const ClassDef* current = classDef;
+            while (current) {
+                for (auto& methodPair : current->methods) {
+                    if (methodPair.second.isVirtual && ov.vtable.find(methodPair.first) == ov.vtable.end()) {
+                        ov.vtable[methodPair.first] = current->name + "::" + methodPair.first;
+                    }
+                }
+                if (current->baseClass.empty()) break;
+                current = classModel->getClass(current->baseClass);
+            }
+        } else {
+            ov.baseClass = "";
+        }
+
         for (auto& m : kv.second->members) {
             MemberInfo mi;
             mi.name = m.first;
             mi.isMethod = false;
             mi.value = m.second.toString();
-            
-            // Get type from class definition
+
+            // Get type and access level from class definition
             if (classDef) {
                 std::shared_ptr<Type> memberType = classDef->getMemberType(m.first);
                 if (memberType) {
@@ -637,10 +788,12 @@ void ExecutorVisitor::recordSnapshot(const std::string& event, int lineNumber, c
                 } else {
                     mi.type = "unknown";
                 }
+                mi.accessLevel = accessLevelToString(classDef->getMemberAccess(m.first));
             } else {
                 mi.type = "unknown";
+                mi.accessLevel = "private";
             }
-            
+
             ov.members.push_back(mi);
         }
         objs.push_back(ov);
@@ -657,22 +810,6 @@ void Executor::executeProgram(const std::shared_ptr<Program>& program) {
 Value Executor::evaluateExpression(const std::shared_ptr<Expr>& expr) {
     return visitor->evaluateExpression(expr);
 }
-
-// void Executor::stepInto() {
-//     visitor->stepInto();
-// }
-
-// void Executor::stepOver() {
-//     visitor->stepOver();
-// }
-
-// void Executor::stepOut() {
-//     visitor->stepOut();
-// }
-
-// void Executor::runUntilBreakpoint(int line) {
-//     visitor->runUntilBreakpoint(line);
-// }
 
 std::shared_ptr<Memory> Executor::getMemory() const {
     return visitor->getMemory();

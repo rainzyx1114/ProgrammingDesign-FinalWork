@@ -10,6 +10,7 @@
 enum class TokenType {
     // Single-character tokens
     LEFT_PAREN, RIGHT_PAREN, LEFT_BRACE, RIGHT_BRACE,
+    LEFT_BRACKET, RIGHT_BRACKET,
     COMMA, DOT, MINUS, PLUS, SEMICOLON, SLASH, STAR, COLON,
 
     // One or two character tokens
@@ -18,14 +19,16 @@ enum class TokenType {
     GREATER, GREATER_EQUAL,
     LESS, LESS_EQUAL,
     AND, OR,
+    AMPERSAND, ARROW,
 
     // Literals
     IDENTIFIER, STRING, NUMBER,
 
     // Keywords
     CLASS, ELSE, FALSE, FOR, IF, NIL,
-    PRINT, RETURN, PUBLIC, THIS, TRUE, VIRTUAL, WHILE, UNKNOWN,
-    eof, INT, DOUBLE, BOOL, FLOAT, CHAR, VOID, STRING_TYPE, STRUCT, CONST
+    RETURN, PUBLIC, PRIVATE, PROTECTED, TRUE, VIRTUAL, WHILE, UNKNOWN,
+    eof, INT, DOUBLE, BOOL, FLOAT, CHAR, VOID, STRING_TYPE, STRUCT, CONST,
+    NEW
 };
 
 class Token {

@@ -119,17 +119,39 @@ void Memory::setLexicalVariableName(int binding_depth, int slot_index, const std
     names[slot_index] = name;
 }
 
-std::shared_ptr<Object> Memory::createObject(const std::string& className) {
+int Memory::createObjectReturnId(const std::string& className) {
     auto obj = std::make_shared<Object>(className);
-    std::string id = "obj" + std::to_string(nextObjectId++);
+    int objId = nextObjectId++;
+    std::string id = "obj" + std::to_string(objId);
     heap[id] = obj;
-    return obj;
+    return objId;
+}
+
+int Memory::putOnHeap(std::shared_ptr<Object> obj) {
+    int objId = nextObjectId++;
+    std::string id = "obj" + std::to_string(objId);
+    heap[id] = obj;
+    return objId;
 }
 
 std::shared_ptr<Object> Memory::getObject(const std::string& objectId) {
     auto it = heap.find(objectId);
     if (it != heap.end()) return it->second;
     return nullptr;
+}
+
+std::shared_ptr<Object> Memory::getObjectById(int id) {
+    return getObject("obj" + std::to_string(id));
+}
+
+std::shared_ptr<Object> Memory::createArray(int size) {
+    auto obj = std::make_shared<Object>("array");
+    for (int i = 0; i < size; i++) {
+        obj->setMember(std::to_string(i), Value(0));
+    }
+    std::string id = "obj" + std::to_string(nextObjectId++);
+    heap[id] = obj;
+    return obj;
 }
 
 const std::map<std::string, std::shared_ptr<Object>>& Memory::getHeap() const {
