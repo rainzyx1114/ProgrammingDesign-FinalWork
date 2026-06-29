@@ -207,10 +207,6 @@ static std::string platformPost(const std::string& url,
 }
 #endif
 
-// ---------------------------------------------------------------------------
-// AIAnalyzer implementation
-// ---------------------------------------------------------------------------
-
 AIAnalyzer::AIAnalyzer()
     : apiEndpoint("https://api.openai.com/v1/chat/completions")
     , model("gpt-4o")
