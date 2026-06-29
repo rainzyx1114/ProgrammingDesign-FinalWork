@@ -189,15 +189,17 @@ void ASTAnalyzer::visit(Program& node) {
 }
 
 CodeAnalyzer::CodeAnalyzer()
-    : isLoaded(false), isExecuting(false) {
+    : isLoaded(false), isExecuting(false), analysisMode(AnalysisMode::MANUAL) {
     memory = std::make_shared<Memory>();
     symbolTable = std::make_shared<SymbolTable>();
     classModel = std::make_shared<ClassModel>();
     astAnalyzer = std::make_shared<ASTAnalyzer>(symbolTable, classModel);
     executor = std::make_shared<Executor>(memory, symbolTable, classModel);
+    aiAnalyzer = std::make_shared<AIAnalyzer>();
 }
 
 bool CodeAnalyzer::loadCode(const std::string& sourceCode) {
+    lastSourceCode = sourceCode;
     lexer = std::make_shared<Lexer>(sourceCode);
     auto tokens = lexer->tokenize();
     for (const auto& token : tokens) {
@@ -386,4 +388,70 @@ std::string CodeAnalyzer::getCurrentFunction() const {
     auto frame = memory->currentFrame();
     if (!frame) return std::string();
     return frame->functionName;
+}
+
+void CodeAnalyzer::setAnalysisMode(AnalysisMode mode) {
+    analysisMode = mode;
+}
+
+void CodeAnalyzer::setAPIKey(const std::string& key) {
+    aiAnalyzer->setAPIKey(key);
+}
+
+void CodeAnalyzer::setAPIEndpoint(const std::string& endpoint) {
+    aiAnalyzer->setEndpoint(endpoint);
+}
+
+void CodeAnalyzer::setAPIModel(const std::string& model) {
+    aiAnalyzer->setModel(model);
+}
+
+std::shared_ptr<AIAnalysisResult> CodeAnalyzer::getAIResult() {
+    if (analysisMode == AnalysisMode::MANUAL) {
+        return nullptr;  // AI analysis not requested
+    }
+
+    if (!aiAnalyzer->isConfigured()) {
+        auto result = std::make_shared<AIAnalysisResult>();
+        result->success = false;
+        result->errorMessage =
+            "AI_TEACHING mode selected but no API key configured. "
+            "Use --api-key to provide your key.";
+        lastAIResult = result;
+        return result;
+    }
+
+    if (!isLoaded) {
+        auto result = std::make_shared<AIAnalysisResult>();
+        result->success = false;
+        result->errorMessage = "No code loaded yet. Call loadCode() first.";
+        lastAIResult = result;
+        return result;
+    }
+
+    // Collect all analysis state and send to AI
+    AIAnalysisResult result = aiAnalyzer->analyze(
+        lastSourceCode,
+        getExecutionTrace(),
+        getAllClassViews(),
+        getObjectsOnHeap(),
+        getVariables()
+    );
+
+    lastAIResult = std::make_shared<AIAnalysisResult>(std::move(result));
+    return lastAIResult;
+}
+
+bool CodeAnalyzer::runFullAnalysis(const std::string& sourceCode) {
+    if (!loadCode(sourceCode))
+        return false;
+
+    start();  // execute manually first
+
+    // If AI mode is on, trigger AI analysis after execution
+    if (analysisMode == AnalysisMode::AI_TEACHING) {
+        getAIResult();  // stores result in lastAIResult
+    }
+
+    return true;
 }
