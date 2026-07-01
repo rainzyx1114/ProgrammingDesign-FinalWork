@@ -108,7 +108,7 @@ std::string ClassModel::resolveVirtualMethod(const std::string& className, const
     while (current) {
         auto it = current->methods.find(methodName);
         if (it != current->methods.end()) {
-            if (it->second.isVirtual) {
+            if (it->second.isVirtual && !lastVirtualOwner) {
                 lastVirtualOwner = current;
             }
         }

@@ -5,7 +5,8 @@ ExecutorVisitor::ExecutorVisitor(std::shared_ptr<Memory> mem,
                                std::shared_ptr<SymbolTable> sym,
                                std::shared_ptr<ClassModel> cls)
     : memory(mem), symbolTable(sym), classModel(cls),
-      mode(ExecutionMode::PAUSED), shouldBreak(false), shouldContinue(false), shouldReturn(false), nextLineToExecute(0) {
+      mode(ExecutionMode::PAUSED), shouldBreak(false), shouldContinue(false), shouldReturn(false), nextLineToExecute(0),
+      currentThis(nullptr) {
 }
 
 Executor::Executor(std::shared_ptr<Memory> mem,
@@ -228,6 +229,9 @@ void ExecutorVisitor::visit(Variable& node) {
     // use binding attached to AST node by analyzer
     if (node.binding.scope_depth >= 0) {
         currentValue = memory->getByBinding(node.binding.scope_depth, node.binding.slot_index);
+    } else if (currentThis) {
+        // Fallback: resolve as member of the current 'this' object
+        currentValue = currentThis->getMember(node.name.lexeme);
     } else {
         currentValue = Value();
     }
@@ -247,6 +251,7 @@ void ExecutorVisitor::visit(FunctionCall& node) {
     FuncDecl* fdecl = nullptr;
     int callLine = 0;
     std::string actualClassName; // for virtual dispatch
+    std::shared_ptr<Object> methodObject; // for "this" context capture
 
     if (node.name) {
         if (auto ma = dynamic_cast<MemberAccess*>(node.name.get())) {
@@ -261,10 +266,12 @@ void ExecutorVisitor::visit(FunctionCall& node) {
                 auto obj = memory->getObjectById(objId);
                 if (obj) {
                     actualClassName = obj->className;
+                    methodObject = obj;
                 }
             } else {
                 if (objVal.objectRef) {
                     actualClassName = objVal.objectRef->className;
+                    methodObject = objVal.objectRef;
                 }
             }
 
@@ -280,6 +287,15 @@ void ExecutorVisitor::visit(FunctionCall& node) {
                     // look up ClassName::methodName
                     fdecl = symbolTable->lookupFunction(actualClassName + "::" + ma->member);
                 }
+                // Inheritance chain search for non-virtual inherited methods
+                if (!fdecl) {
+                    std::string baseClass = classModel->getBaseClass(actualClassName);
+                    while (!baseClass.empty()) {
+                        fdecl = symbolTable->lookupFunction(baseClass + "::" + ma->member);
+                        if (fdecl) break;
+                        baseClass = classModel->getBaseClass(baseClass);
+                    }
+                }
                 // Also try the method name directly (for global-like methods)
                 if (!fdecl) {
                     fdecl = symbolTable->lookupFunction(ma->member);
@@ -292,6 +308,28 @@ void ExecutorVisitor::visit(FunctionCall& node) {
             // Standalone function call: foo()
             fdecl = symbolTable->lookupFunction(var->name.lexeme);
             callLine = var->name.lineNumber;
+
+            // Bare call fallback: if inside a method and bare name not found,
+            // try dispatch through 'this'
+            if (!fdecl && currentThis && !currentClassName.empty()) {
+                std::string resolved = classModel->resolveVirtualMethod(
+                    currentClassName, var->name.lexeme);
+                if (!resolved.empty()) {
+                    fdecl = symbolTable->lookupFunction(resolved);
+                    if (fdecl) {
+                        methodObject = currentThis;
+                        actualClassName = currentClassName;
+                    }
+                }
+                if (!fdecl) {
+                    fdecl = symbolTable->lookupFunction(
+                        currentClassName + "::" + var->name.lexeme);
+                    if (fdecl) {
+                        methodObject = currentThis;
+                        actualClassName = currentClassName;
+                    }
+                }
+            }
         }
     }
     if (!fdecl) {
@@ -327,7 +365,19 @@ void ExecutorVisitor::visit(FunctionCall& node) {
     shouldReturn = false;
     returnValue = Value();
 
+    // Save and set "this" context for method calls
+    auto savedThis = currentThis;
+    auto savedClassName = currentClassName;
+    if (methodObject && !actualClassName.empty()) {
+        currentThis = methodObject;
+        currentClassName = actualClassName;
+    }
+
     if (fdecl->body) fdecl->body->accept(*this);
+
+    // Restore "this" context
+    currentThis = savedThis;
+    currentClassName = savedClassName;
 
     Value result;
     if (shouldReturn) result = returnValue;
@@ -428,6 +478,9 @@ void ExecutorVisitor::visit(Assignment& node) {
     } else if (node.binding.scope_depth >= 0) {
         // Simple variable assignment (existing path)
         memory->setByBinding(node.binding.scope_depth, node.binding.slot_index, val);
+    } else if (currentThis && !node.name.lexeme.empty()) {
+        // Fallback: set member on the current 'this' object
+        currentThis->setMember(node.name.lexeme, val);
     }
 
     currentValue = val;
@@ -459,6 +512,12 @@ void ExecutorVisitor::visit(VarDecl& node) {
             if (size <= 0) size = 1; // default size for unspecified arrays
             auto arrObj = memory->createArray(size);
             initialValue = Value(arrObj);
+        } else if (auto classType = dynamic_cast<ClassType*>(node.type.get())) {
+            // Handle class type: create instance with default-initialized members
+            if (classModel->isDefined(classType->className)) {
+                auto instance = classModel->createInstance(classType->className);
+                initialValue = Value(instance);
+            }
         }
     }
 
@@ -607,6 +666,9 @@ Value ExecutorVisitor::applyUnaryOp(const std::string& op, const Value& val) {
                     }
                 }
             }
+            // Stack object not yet on heap: put it there and return pointer
+            int objId = memory->putOnHeap(val.objectRef);
+            return Value::pointerFromId(objId);
         }
         return Value();
     }

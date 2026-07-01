@@ -6,8 +6,8 @@
 #include "types.h"
 
 struct Binding {
-    int scope_depth;
-    int slot_index;
+    int scope_depth = -1;
+    int slot_index = -1;
     std::shared_ptr<Type> type;
 };
 
