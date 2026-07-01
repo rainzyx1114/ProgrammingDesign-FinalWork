@@ -24,9 +24,11 @@ private:
     // lexical frames: each element is a vector of slots (Values) for that lexical depth
     std::vector<std::vector<Value>> lexicalFrames;
     std::vector<std::vector<std::string>> lexicalNameFrames;
+    std::vector<std::vector<std::string>> lexicalTypeFrames;
     // Save lexical frames when entering function calls, so we can restore after returning
     std::vector<std::vector<std::vector<Value>>> lexicalFrameHistory;
     std::vector<std::vector<std::vector<std::string>>> lexicalNameFrameHistory;
+    std::vector<std::vector<std::vector<std::string>>> lexicalTypeFrameHistory;
     std::map<std::string, std::shared_ptr<Object>> heap;  // Simple object management
     int nextObjectId;
 
@@ -55,9 +57,13 @@ public:
     std::vector<Value> getCurrentLexicalSlots() const;
     std::vector<std::vector<Value>> getLexicalFrames() const;
     std::vector<std::vector<std::string>> getLexicalVariableNames() const;
+    std::vector<std::vector<std::string>> getLexicalVariableTypes() const;
     std::vector<std::vector<Value>> getLexicalFramesForCallFrame(int frameIndex) const;
     std::vector<std::vector<std::string>> getLexicalVariableNamesForCallFrame(int frameIndex) const;
+    std::vector<std::vector<std::string>> getLexicalVariableTypesForCallFrame(int frameIndex) const;
     void setLexicalVariableName(int binding_depth, int slot_index, const std::string& name);
+    void setLexicalVariableType(int binding_depth, int slot_index, const std::string& typeName);
+    std::string getLexicalVariableType(int binding_depth, int slot_index) const;
 
     // Object (heap) operations
     int createObjectReturnId(const std::string& className);

@@ -429,16 +429,27 @@ std::shared_ptr<AIAnalysisResult> CodeAnalyzer::getAIResult() {
         return result;
     }
 
-    // Collect all analysis state and send to AI
-    AIAnalysisResult result = aiAnalyzer->analyze(
-        lastSourceCode,
-        getExecutionTrace(),
-        getAllClassViews(),
-        getObjectsOnHeap(),
-        getVariables()
-    );
+    // Send source code to AI for analysis
+    AIAnalysisResult result = aiAnalyzer->analyze(lastSourceCode);
 
     lastAIResult = std::make_shared<AIAnalysisResult>(std::move(result));
+    return lastAIResult;
+}
+
+std::shared_ptr<AIAnalysisResult> CodeAnalyzer::askFollowUpQuestion(const std::string& question) {
+    if (analysisMode == AnalysisMode::MANUAL) {
+        return nullptr;
+    }
+
+    if (!aiAnalyzer->isConfigured()) {
+        auto result = std::make_shared<AIAnalysisResult>();
+        result->success = false;
+        result->errorMessage = "API key not configured.";
+        return result;
+    }
+
+    AIAnalysisResult rawResult = aiAnalyzer->askFollowUp(question);
+    lastAIResult = std::make_shared<AIAnalysisResult>(std::move(rawResult));
     return lastAIResult;
 }
 

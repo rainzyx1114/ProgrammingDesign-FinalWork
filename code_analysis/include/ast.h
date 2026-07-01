@@ -182,8 +182,8 @@ public:
     void accept(Visitor& visitor) override;
 };
 
-// Declaration nodes
-class Decl : public ASTNode {
+// Declaration nodes — inherit from Stmt so they can appear in Block bodies
+class Decl : public Stmt {
 public:
     virtual ~Decl() = default;
 };

@@ -106,6 +106,10 @@ public:
     // or if something went wrong.
     std::shared_ptr<AIAnalysisResult> getAIResult();
 
+    // Ask a follow-up question about the previously analysed code.
+    // Returns nullptr in MANUAL mode or if no analysis has been performed yet.
+    std::shared_ptr<AIAnalysisResult> askFollowUpQuestion(const std::string& question);
+
     // Convenience: load, execute, and optionally AI-analyse in one call
     // Returns true if code loaded successfully (execution + AI always run if configured)
     bool runFullAnalysis(const std::string& sourceCode);

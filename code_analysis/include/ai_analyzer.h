@@ -29,17 +29,14 @@ private:
     std::string model;               // Model name to use
     bool configured;                 // true when apiKey is set
 
-    std::string buildPrompt(
-        const std::string& sourceCode,
-        const std::vector<Stepsnapshot>& trace,
-        const std::vector<ClassView>& classViews,
-        const std::vector<ObjectView>& objectsOnHeap,
-        const std::vector<VariableInfo>& variables
-    ) const;
+    // Conversation history: pairs of (role, content)
+    mutable std::vector<std::pair<std::string, std::string>> conversationHistory;
+
+    std::string buildPrompt(const std::string& sourceCode) const;
 
     // Make an HTTP POST request to the OpenAI-compatible chat completions API
-    // Returns the response body as a string, or throws on failure
-    std::string callChatAPI(const std::string& prompt) const;
+    // Accepts a list of messages (role, content pairs)
+    std::string callChatAPI(const std::vector<std::pair<std::string, std::string>>& messages) const;
 
     // Parse the AI's JSON response into structured fields
     AIAnalysisResult parseResponse(const std::string& rawJSON) const;
@@ -67,14 +64,11 @@ public:
     bool isConfigured() const { return configured; }
     const std::string& getModel() const { return model; }
 
-    // Run AI analysis — gathers all state and sends it to the API
-    AIAnalysisResult analyze(
-        const std::string& sourceCode,
-        const std::vector<Stepsnapshot>& trace,
-        const std::vector<ClassView>& classViews,
-        const std::vector<ObjectView>& objectsOnHeap,
-        const std::vector<VariableInfo>& variables
-    ) const;
+    // Run AI analysis on source code only — starts a new conversation
+    AIAnalysisResult analyze(const std::string& sourceCode);
+
+    // Ask a follow-up question — continues the existing conversation
+    AIAnalysisResult askFollowUp(const std::string& question);
 };
 
 #endif

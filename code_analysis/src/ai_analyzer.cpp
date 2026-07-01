@@ -228,11 +228,11 @@ void AIAnalyzer::setModel(const std::string& m) {
         model = m;
 }
 
-std::string AIAnalyzer::callChatAPI(const std::string& userPrompt) const {
+std::string AIAnalyzer::callChatAPI(const std::vector<std::pair<std::string, std::string>>& messages) const {
     // Build the JSON request body
     std::string systemMsg =
         "You are an expert programming teacher who analyses C/C++ code. "
-        "You explain code execution step by step, identify bugs, suggest improvements, "
+        "You explain what the code does, identify bugs, suggest improvements, "
         "and highlight OOP / language concepts. "
         "Always respond in the following JSON format exactly — do NOT include markdown fences or extra text:\n"
         "{\n"
@@ -248,107 +248,27 @@ std::string AIAnalyzer::callChatAPI(const std::string& userPrompt) const {
         "{\n"
         "  \"model\": \"" + model + "\",\n"
         "  \"messages\": [\n"
-        "    {\"role\": \"system\", \"content\": \"" + jsonEscape(systemMsg) + "\"},\n"
-        "    {\"role\": \"user\", \"content\": \"" + jsonEscape(userPrompt) + "\"}\n"
-        "  ],\n"
+        "    {\"role\": \"system\", \"content\": \"" + jsonEscape(systemMsg) + "\"}";
+
+    for (const auto& msg : messages) {
+        jsonPayload += ",\n    {\"role\": \"" + msg.first + "\", \"content\": \"" + jsonEscape(msg.second) + "\"}";
+    }
+
+    jsonPayload += "\n  ],\n"
         "  \"temperature\": 0.3\n"
         "}\n";
 
     return platformPost(apiEndpoint, apiKey, jsonPayload);
 }
 
-std::string AIAnalyzer::buildPrompt(
-    const std::string& sourceCode,
-    const std::vector<Stepsnapshot>& trace,
-    const std::vector<ClassView>& classViews,
-    const std::vector<ObjectView>& objectsOnHeap,
-    const std::vector<VariableInfo>& variables) const
+std::string AIAnalyzer::buildPrompt(const std::string& sourceCode) const
 {
     std::ostringstream prompt;
 
-    prompt << "Please analyse the following C/C++ code and its execution.  "
+    prompt << "Please analyse the following C/C++ code. "
            << "Give me a complete teaching explanation.\n\n";
 
     prompt << "=== SOURCE CODE ===\n" << sourceCode << "\n\n";
-
-    if (!trace.empty()) {
-        prompt << "=== EXECUTION TRACE (" << trace.size() << " steps) ===\n";
-        for (const auto& s : trace) {
-            prompt << "Step " << s.stepIndex << " [" << s.event << "] "
-                   << "line=" << s.state.currentLine
-                   << " func=" << s.state.currentFunction << "\n";
-            for (const auto& frame : s.state.stackTrace.frames) {
-                prompt << "  Frame: " << frame.functionName
-                       << " line=" << frame.lineNumber << "\n";
-                for (const auto& var : frame.variables) {
-                    prompt << "    var " << var.name
-                           << " (" << var.type << ") = " << var.value << "\n";
-                }
-            }
-        }
-        prompt << "\n";
-    }
-
-    if (!variables.empty()) {
-        prompt << "=== FINAL VARIABLES (" << variables.size() << ") ===\n";
-        for (const auto& v : variables) {
-            prompt << "  " << v.name << " : " << v.type << " = " << v.value << "\n";
-        }
-        prompt << "\n";
-    }
-
-    if (!objectsOnHeap.empty()) {
-        prompt << "=== HEAP OBJECTS (" << objectsOnHeap.size() << ") ===\n";
-        for (const auto& obj : objectsOnHeap) {
-            prompt << "  " << obj.objectId << " class=" << obj.className;
-            if (!obj.baseClass.empty()) prompt << " base=" << obj.baseClass;
-            prompt << "\n";
-            for (const auto& m : obj.members) {
-                prompt << "    " << m.name << " (" << m.type << ") = "
-                       << m.value << " [" << m.accessLevel << "]\n";
-            }
-        }
-        prompt << "\n";
-    }
-
-    if (!classViews.empty()) {
-        prompt << "=== CLASS HIERARCHY (" << classViews.size() << " classes) ===\n";
-        for (const auto& cv : classViews) {
-            prompt << "  Class: " << cv.classname;
-            if (!cv.baseClass.empty()) prompt << " : " << cv.baseClass;
-            prompt << " (inheritance_depth=" << cv.inheritance_depth << ")\n";
-
-            if (!cv.members.empty()) {
-                prompt << "    Data members:\n";
-                for (const auto& m : cv.members)
-                    prompt << "      " << m.name << " : " << m.type
-                           << " [" << m.accessLevel << "]\n";
-            }
-            if (!cv.methods.empty()) {
-                prompt << "    Methods:\n";
-                for (const auto& m : cv.methods) {
-                    prompt << "      " << m.name << " : " << m.type
-                           << " [" << m.accessLevel << "]";
-                    if (!m.value.empty()) prompt << " (" << m.value << ")";
-                    prompt << "\n";
-                }
-            }
-            if (!cv.derived_classes.empty()) {
-                prompt << "    Derived classes: ";
-                for (size_t i = 0; i < cv.derived_classes.size(); ++i) {
-                    if (i > 0) prompt << ", ";
-                    prompt << cv.derived_classes[i];
-                }
-                prompt << "\n";
-            }
-            if (!cv.vtable.empty()) {
-                prompt << "    VTable:\n";
-                for (const auto& vt : cv.vtable)
-                    prompt << "      " << vt.first << " -> " << vt.second << "\n";
-            }
-        }
-        prompt << "\n";
-    }
 
     prompt << "Based on the above, provide your JSON response with fields: "
            << "explanation, stepByStep, suggestions, potentialBugs, concepts.";
@@ -416,13 +336,7 @@ AIAnalysisResult AIAnalyzer::parseResponse(const std::string& raw) const {
     return result;
 }
 
-AIAnalysisResult AIAnalyzer::analyze(
-    const std::string& sourceCode,
-    const std::vector<Stepsnapshot>& trace,
-    const std::vector<ClassView>& classViews,
-    const std::vector<ObjectView>& objectsOnHeap,
-    const std::vector<VariableInfo>& variables) const
-{
+AIAnalysisResult AIAnalyzer::analyze(const std::string& sourceCode) {
     AIAnalysisResult result;
     result.success = false;
 
@@ -432,10 +346,17 @@ AIAnalysisResult AIAnalyzer::analyze(
         return result;
     }
 
-    std::string prompt = buildPrompt(sourceCode, trace, classViews, objectsOnHeap, variables);
+    // Start a new conversation: clear history
+    conversationHistory.clear();
+
+    std::string prompt = buildPrompt(sourceCode);
+
+    // Build message list: just the initial user prompt
+    std::vector<std::pair<std::string, std::string>> messages;
+    messages.push_back({"user", prompt});
 
     try {
-        std::string rawResponse = callChatAPI(prompt);
+        std::string rawResponse = callChatAPI(messages);
         if (rawResponse.empty()) {
             result.errorMessage =
                 "Empty response from AI API.  Check your API key, endpoint, and network connection.";
@@ -446,9 +367,62 @@ AIAnalysisResult AIAnalyzer::analyze(
         if (!result.success && result.errorMessage.empty()) {
             result.errorMessage = "Failed to parse AI response. Raw:\n" + rawResponse;
         }
+
+        // Store the exchange in conversation history
+        conversationHistory.push_back({"user", prompt});
+        if (result.success) {
+            conversationHistory.push_back({"assistant", result.rawResponse});
+        }
     } catch (const std::exception& e) {
         result.errorMessage = std::string("API call failed: ") + e.what();
     } catch (...) {
+        result.errorMessage = "Unknown error during API call.";
+    }
+
+    return result;
+}
+
+AIAnalysisResult AIAnalyzer::askFollowUp(const std::string& question) {
+    AIAnalysisResult result;
+    result.success = false;
+
+    if (!configured) {
+        result.errorMessage = "API key not set.";
+        return result;
+    }
+
+    if (conversationHistory.empty()) {
+        result.errorMessage = "No active analysis session. Call analyze() first.";
+        return result;
+    }
+
+    // Append the user's follow-up question to history
+    conversationHistory.push_back({"user", question});
+
+    try {
+        std::string rawResponse = callChatAPI(conversationHistory);
+        if (rawResponse.empty()) {
+            result.errorMessage = "Empty response from AI API.";
+            return result;
+        }
+
+        result = parseResponse(rawResponse);
+        if (!result.success && result.errorMessage.empty()) {
+            result.errorMessage = "Failed to parse AI response.";
+        }
+
+        // Store assistant response in history
+        if (result.success) {
+            conversationHistory.push_back({"assistant", result.rawResponse});
+        } else {
+            // Remove the user question from history on failure so retry is clean
+            conversationHistory.pop_back();
+        }
+    } catch (const std::exception& e) {
+        conversationHistory.pop_back(); // clean up on error
+        result.errorMessage = std::string("API call failed: ") + e.what();
+    } catch (...) {
+        conversationHistory.pop_back();
         result.errorMessage = "Unknown error during API call.";
     }
 

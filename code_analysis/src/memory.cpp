@@ -10,6 +10,7 @@ Memory::Memory()
     // start with a global lexical frame (depth 0) with zero slots; will be resized by initLexicalFrames
     lexicalFrames.emplace_back();
     lexicalNameFrames.emplace_back();
+    lexicalTypeFrames.emplace_back();
 }
 
 void Memory::pushFrame(const std::string& functionName,
@@ -21,11 +22,14 @@ void Memory::pushFrame(const std::string& functionName,
     // Save current lexical frames and names before entering a new function call.
     lexicalFrameHistory.push_back(lexicalFrames);
     lexicalNameFrameHistory.push_back(lexicalNameFrames);
+    lexicalTypeFrameHistory.push_back(lexicalTypeFrames);
     // entering a function: reset lexical frames and names to global depth 0
     lexicalFrames.clear();
     lexicalNameFrames.clear();
+    lexicalTypeFrames.clear();
     lexicalFrames.emplace_back();
     lexicalNameFrames.emplace_back();
+    lexicalTypeFrames.emplace_back();
 }
 
 void Memory::popFrame() {
@@ -47,6 +51,13 @@ void Memory::popFrame() {
         lexicalNameFrames.clear();
         lexicalNameFrames.emplace_back();
     }
+    if (!lexicalTypeFrameHistory.empty()) {
+        lexicalTypeFrames = lexicalTypeFrameHistory.back();
+        lexicalTypeFrameHistory.pop_back();
+    } else {
+        lexicalTypeFrames.clear();
+        lexicalTypeFrames.emplace_back();
+    }
 }
 
 std::shared_ptr<StackFrame> Memory::currentFrame() {
@@ -63,34 +74,44 @@ const std::vector<std::shared_ptr<StackFrame>>& Memory::getCallStack() const {
 void Memory::initLexicalFrames(const std::vector<int>& slotsPerLevel) {
     lexicalFrames.clear();
     lexicalNameFrames.clear();
+    lexicalTypeFrames.clear();
     for (int s : slotsPerLevel) {
         lexicalFrames.emplace_back(std::vector<Value>(s));
         std::vector<std::string> names;
+        std::vector<std::string> types;
         for (int i = 0; i < s; ++i) {
             names.push_back("slot" + std::to_string(i));
+            types.push_back("");
         }
         lexicalNameFrames.push_back(std::move(names));
+        lexicalTypeFrames.push_back(std::move(types));
     }
     if (lexicalFrames.empty()) {
         lexicalFrames.emplace_back();
         lexicalNameFrames.emplace_back();
+        lexicalTypeFrames.emplace_back();
     }
 }
 
 void Memory::pushScopeFrame(int slots) {
     lexicalFrames.emplace_back(std::vector<Value>(slots));
     std::vector<std::string> names;
+    std::vector<std::string> types;
     for (int i = 0; i < slots; ++i) {
         names.push_back("slot" + std::to_string(i));
+        types.push_back("");
     }
     lexicalNameFrames.emplace_back(std::move(names));
+    lexicalTypeFrames.emplace_back(std::move(types));
 }
 
 void Memory::popScopeFrame() {
     if (!lexicalFrames.empty()) lexicalFrames.pop_back();
     if (!lexicalNameFrames.empty()) lexicalNameFrames.pop_back();
+    if (!lexicalTypeFrames.empty()) lexicalTypeFrames.pop_back();
     if (lexicalFrames.empty()) lexicalFrames.emplace_back();
     if (lexicalNameFrames.empty()) lexicalNameFrames.emplace_back();
+    if (lexicalTypeFrames.empty()) lexicalTypeFrames.emplace_back();
 }
 
 Value Memory::getByBinding(int binding_depth, int slot_index) {
@@ -117,6 +138,24 @@ void Memory::setLexicalVariableName(int binding_depth, int slot_index, const std
     if (slot_index < 0) return;
     if (slot_index >= (int)names.size()) names.resize(slot_index + 1);
     names[slot_index] = name;
+}
+
+void Memory::setLexicalVariableType(int binding_depth, int slot_index, const std::string& typeName) {
+    if (binding_depth < 0) return;
+    if (binding_depth >= (int)lexicalTypeFrames.size()) {
+        lexicalTypeFrames.resize(binding_depth + 1);
+    }
+    auto &types = lexicalTypeFrames[binding_depth];
+    if (slot_index < 0) return;
+    if (slot_index >= (int)types.size()) types.resize(slot_index + 1);
+    types[slot_index] = typeName;
+}
+
+std::string Memory::getLexicalVariableType(int binding_depth, int slot_index) const {
+    if (binding_depth < 0 || binding_depth >= (int)lexicalTypeFrames.size()) return "";
+    auto &types = lexicalTypeFrames[binding_depth];
+    if (slot_index < 0 || slot_index >= (int)types.size()) return "";
+    return types[slot_index];
 }
 
 int Memory::createObjectReturnId(const std::string& className) {
@@ -166,6 +205,10 @@ std::vector<std::vector<std::string>> Memory::getLexicalVariableNames() const {
     return lexicalNameFrames;
 }
 
+std::vector<std::vector<std::string>> Memory::getLexicalVariableTypes() const {
+    return lexicalTypeFrames;
+}
+
 std::vector<std::vector<Value>> Memory::getLexicalFramesForCallFrame(int frameIndex) const {
     int totalFrames = callStack.size();
     if (frameIndex < 0 || frameIndex >= totalFrames) {
@@ -192,6 +235,21 @@ std::vector<std::vector<std::string>> Memory::getLexicalVariableNamesForCallFram
     int historyIndex = frameIndex + 1;
     if (historyIndex < (int)lexicalNameFrameHistory.size()) {
         return lexicalNameFrameHistory[historyIndex];
+    }
+    return {};
+}
+
+std::vector<std::vector<std::string>> Memory::getLexicalVariableTypesForCallFrame(int frameIndex) const {
+    int totalFrames = callStack.size();
+    if (frameIndex < 0 || frameIndex >= totalFrames) {
+        return {};
+    }
+    if (frameIndex == totalFrames - 1) {
+        return lexicalTypeFrames;
+    }
+    int historyIndex = frameIndex + 1;
+    if (historyIndex < (int)lexicalTypeFrameHistory.size()) {
+        return lexicalTypeFrameHistory[historyIndex];
     }
     return {};
 }
