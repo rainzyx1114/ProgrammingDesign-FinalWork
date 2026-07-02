@@ -49,23 +49,40 @@ static std::string extractJSONString(const std::string& json, const std::string&
     if (pos == std::string::npos) return "";
     pos = json.find('"', pos + 1);
     if (pos == std::string::npos) return "";
-    size_t end = json.find('"', pos + 1);
-    if (end == std::string::npos) return "";
+
+    // Find the closing quote, skipping over backslash-escaped characters
+    size_t end = pos + 1;
+    while (end < json.size()) {
+        if (json[end] == '\\') {
+            end += 2;  // skip the backslash and the escaped character
+        } else if (json[end] == '"') {
+            break;     // found the unescaped closing quote
+        } else {
+            ++end;
+        }
+    }
+    if (end >= json.size()) return "";
+
     std::string val = json.substr(pos + 1, end - pos - 1);
-    // unescape
+
+    // Unescape: build a new string to avoid index confusion from in-place replace
+    std::string out;
+    out.reserve(val.size());
     for (size_t i = 0; i < val.size(); ++i) {
         if (val[i] == '\\' && i + 1 < val.size()) {
             switch (val[i + 1]) {
-                case 'n': val.replace(i, 2, "\n"); break;
-                case 'r': val.replace(i, 2, "\r"); break;
-                case 't': val.replace(i, 2, "\t"); break;
-                case '"': val.replace(i, 2, "\""); break;
-                case '\\': val.replace(i, 2, "\\"); break;
-                default: break;
+                case 'n':  out += '\n'; ++i; break;
+                case 'r':  out += '\r'; ++i; break;
+                case 't':  out += '\t'; ++i; break;
+                case '"':  out += '"';  ++i; break;
+                case '\\': out += '\\'; ++i; break;
+                default:   out += val[i];    break;  // keep the backslash as-is
             }
+        } else {
+            out += val[i];
         }
     }
-    return val;
+    return out;
 }
 
 
