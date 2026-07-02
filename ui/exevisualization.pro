@@ -1,4 +1,4 @@
-QT += widgets
+QT += widgets concurrent
 
 CONFIG += c++17
 
@@ -24,17 +24,16 @@ qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
-OTHER_FILES += \
-    icons/arrow_back_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg \
 RESOURCES += \
     res.qrc
+
 INCLUDEPATH += $$PWD/../code_analysis/include
 DEPENDPATH += $$PWD/../code_analysis/include
 
 INCLUDEPATH += $$PWD/../knowledgebook
 DEPENDPATH += $$PWD/../knowledgebook
 
-# 2. 把队友的所有头文件加进来（用于在 Qt Creator 左侧显示）
+# ---- code_analysis 头文件 ----
 HEADERS += \
     $$PWD/../code_analysis/include/analyzer.h \
     $$PWD/../code_analysis/include/ast.h \
@@ -45,12 +44,12 @@ HEADERS += \
     $$PWD/../code_analysis/include/memory.h \
     $$PWD/../code_analysis/include/parser.h \
     $$PWD/../code_analysis/include/symbol_table.h \
-    $$PWD/../code_analysis/include/type_system.h \
     $$PWD/../code_analysis/include/types.h \
     $$PWD/../code_analysis/include/value.h \
-    $$PWD/../code_analysis/include/visualization_data.h \
-    $$PWD/../knowledgebook/knowledgebookwidget.h \
-    $$PWD/../knowledgebook/markdownparser.h
+    $$PWD/../code_analysis/include/ai_analyzer.h \
+    $$PWD/../code_analysis/include/visualization_data.h
+
+# ---- code_analysis 源文件 ----
 SOURCES += \
     $$PWD/../code_analysis/src/analyzer.cpp \
     $$PWD/../code_analysis/src/ast.cpp \
@@ -60,8 +59,28 @@ SOURCES += \
     $$PWD/../code_analysis/src/memory.cpp \
     $$PWD/../code_analysis/src/parser.cpp \
     $$PWD/../code_analysis/src/symbol_table.cpp \
-    $$PWD/../code_analysis/src/type_system.cpp \
     $$PWD/../code_analysis/src/types.cpp \
     $$PWD/../code_analysis/src/value.cpp \
+    $$PWD/../code_analysis/src/ai_analyzer.cpp
+
+# ---- knowledgebook 源文件 ----
+HEADERS += \
+    $$PWD/../knowledgebook/knowledgebookwidget.h \
+    $$PWD/../knowledgebook/markdownparser.h
+
+SOURCES += \
     $$PWD/../knowledgebook/knowledgebookwidget.cpp \
     $$PWD/../knowledgebook/markdownparser.cpp
+
+# ---- 额外文件（在 Qt Creator 中可见但不参与编译）----
+OTHER_FILES += \
+    icons/arrow_back_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg \
+    ../code_analysis/src/test_runner.cpp \
+    ../test_data/test_final1.cpp
+
+# ---- CLI 测试运行器（独立目标，与 GUI 互斥）----
+# 构建方式：取消下面三行注释，注释掉 main.cpp，重新构建
+# SOURCES -= main.cpp
+# SOURCES += $$PWD/../code_analysis/src/test_runner.cpp
+# QT -= widgets
+# CONFIG += console
