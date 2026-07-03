@@ -147,13 +147,16 @@ make  # 或 mingw32-make (Windows)
 
 ## 🤝 贡献指南
 
-欢迎贡献代码、修复bug或改进文档。请遵循以下步骤：
+由于我们的项目没有使用许多现成的工具，所以一定有很多需要改进的地方。
+欢迎有心人贡献代码、修复bug或改进文档。当然，请遵循以下步骤：
 
 1. Fork 项目
 2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
 3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
 4. Push 到分支 (`git push origin feature/AmazingFeature`)
 5. 开启 Pull Request
+
+谢谢！
 
 ---
 
