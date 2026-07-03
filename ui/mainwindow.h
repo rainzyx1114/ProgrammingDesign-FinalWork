@@ -72,14 +72,17 @@ private:
     QLabel* m_functionLabel;
 
     void updateExecutionArrows();
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
     // ========== AI 侧边栏 ==========
     void createAISidebar();
     void appendChatMessage(const QString &sender, const QString &htmlContent);
     QString formatAIResponse(const AIAnalysisResult &result);
+    QString renderAIResponse(const AIAnalysisResult &result);
     void collapseAISidebar();
     void expandAISidebar();
     void startAIAnalysis();   // 代码执行后自动触发首次 AI 分析
+    void startAIAnalysisDirect(const std::string &sourceCode);  // 绕过 loadCode 失败限制，直接调用 AI
 
     // ========== AI 侧边栏控件 ==========
     QWidget *m_aiSidebar = nullptr;
@@ -102,7 +105,7 @@ private:
     std::string m_aiApiKey;
     std::string m_aiApiEndpoint = "https://api.deepseek.com/v1/chat/completions";
     std::string m_aiApiModel = "deepseek-chat";
-    AnalysisMode m_aiMode = AnalysisMode::MANUAL;
+    AnalysisMode m_aiMode = AnalysisMode::AI_TEACHING;
     bool m_aiRequestInFlight = false;
     bool m_aiFirstAnalysisDone = false;
 
