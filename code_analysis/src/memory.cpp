@@ -173,6 +173,33 @@ int Memory::putOnHeap(std::shared_ptr<Object> obj) {
     return objId;
 }
 
+int Memory::registerForPointer(std::shared_ptr<Object> obj) {
+    int objId = nextObjectId++;
+    std::string id = "ptr" + std::to_string(objId);
+    pointerTargets[id] = obj;
+    return objId;
+}
+
+int Memory::findObjectId(std::shared_ptr<Object> obj) const {
+    // Search heap first (for objects created via "new")
+    for (auto& kv : heap) {
+        if (kv.second == obj) {
+            if (kv.first.size() > 3 && kv.first.substr(0, 3) == "obj") {
+                return std::stoi(kv.first.substr(3));
+            }
+        }
+    }
+    // Then search pointerTargets (for stack objects whose address was taken)
+    for (auto& kv : pointerTargets) {
+        if (kv.second == obj) {
+            if (kv.first.size() > 3 && kv.first.substr(0, 3) == "ptr") {
+                return std::stoi(kv.first.substr(3));
+            }
+        }
+    }
+    return -1; // not found in either map
+}
+
 std::shared_ptr<Object> Memory::getObject(const std::string& objectId) {
     auto it = heap.find(objectId);
     if (it != heap.end()) return it->second;
@@ -180,7 +207,13 @@ std::shared_ptr<Object> Memory::getObject(const std::string& objectId) {
 }
 
 std::shared_ptr<Object> Memory::getObjectById(int id) {
-    return getObject("obj" + std::to_string(id));
+    // First try heap (objects created via "new")
+    auto heapResult = getObject("obj" + std::to_string(id));
+    if (heapResult) return heapResult;
+    // Then try pointerTargets (stack objects whose address was taken)
+    auto ptrIt = pointerTargets.find("ptr" + std::to_string(id));
+    if (ptrIt != pointerTargets.end()) return ptrIt->second;
+    return nullptr;
 }
 
 std::shared_ptr<Object> Memory::createArray(int size) {
@@ -188,8 +221,6 @@ std::shared_ptr<Object> Memory::createArray(int size) {
     for (int i = 0; i < size; i++) {
         obj->setMember(std::to_string(i), Value(0));
     }
-    std::string id = "obj" + std::to_string(nextObjectId++);
-    heap[id] = obj;
     return obj;
 }
 

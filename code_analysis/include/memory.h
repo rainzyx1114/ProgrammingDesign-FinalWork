@@ -30,6 +30,7 @@ private:
     std::vector<std::vector<std::vector<std::string>>> lexicalNameFrameHistory;
     std::vector<std::vector<std::vector<std::string>>> lexicalTypeFrameHistory;
     std::map<std::string, std::shared_ptr<Object>> heap;  // Simple object management
+    std::map<std::string, std::shared_ptr<Object>> pointerTargets; // Stack objects with & taken
     int nextObjectId;
 
 public:
@@ -71,6 +72,11 @@ public:
     std::shared_ptr<Object> getObject(const std::string& objectId);
     std::shared_ptr<Object> getObjectById(int id);
     const std::map<std::string, std::shared_ptr<Object>>& getHeap() const;
+
+    // Register a stack object for pointer access (does NOT go into heap visualization)
+    int registerForPointer(std::shared_ptr<Object> obj);
+    // Search both heap and pointerTargets for an object, return its numeric ID or -1
+    int findObjectId(std::shared_ptr<Object> obj) const;
 
     // Array operations
     std::shared_ptr<Object> createArray(int size);

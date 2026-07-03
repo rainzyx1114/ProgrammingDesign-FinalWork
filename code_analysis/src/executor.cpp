@@ -653,21 +653,14 @@ Value ExecutorVisitor::applyUnaryOp(const std::string& op, const Value& val) {
         return Value();
     } else if (op == "&") {
         // Address-of: for objects, return the pointer (heap ID)
-        // For the demo, objects arrive as OBJECT_REF; we need their heap ID
         if (val.type == Value::OBJECT_REF && val.objectRef) {
-            // Search the heap for this object to find its ID
-            for (auto& kv : memory->getHeap()) {
-                if (kv.second == val.objectRef) {
-                    // Extract numeric ID from key "objN"
-                    std::string key = kv.first;
-                    if (key.size() > 3 && key.substr(0, 3) == "obj") {
-                        int id = std::stoi(key.substr(3));
-                        return Value::pointerFromId(id);
-                    }
-                }
+            // Search both heap and pointerTargets for an existing registration
+            int objId = memory->findObjectId(val.objectRef);
+            if (objId >= 0) {
+                return Value::pointerFromId(objId);
             }
-            // Stack object not yet on heap: put it there and return pointer
-            int objId = memory->putOnHeap(val.objectRef);
+            // Stack object not yet registered: register it as a pointer target
+            objId = memory->registerForPointer(val.objectRef);
             return Value::pointerFromId(objId);
         }
         return Value();
