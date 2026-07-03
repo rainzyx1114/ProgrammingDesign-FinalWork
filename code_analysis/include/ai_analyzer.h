@@ -38,8 +38,9 @@ private:
     // Accepts a list of messages (role, content pairs)
     std::string callChatAPI(const std::vector<std::pair<std::string, std::string>>& messages) const;
 
-    // Parse the AI's JSON response into structured fields
-    AIAnalysisResult parseResponse(const std::string& rawJSON) const;
+    // Parse the AI's response into structured fields
+    AIAnalysisResult parseResponse(const std::string& rawJSON,
+                                   bool allowPlainText = false) const;
 
     // Parse a URL into host, port, path components
     struct URLParts {

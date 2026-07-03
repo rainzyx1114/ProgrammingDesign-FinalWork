@@ -283,7 +283,7 @@ std::string AIAnalyzer::buildPrompt(const std::string& sourceCode) const
     std::ostringstream prompt;
 
     prompt << "Please analyse the following C/C++ code. "
-           << "Give me a complete teaching explanation.\n\n";
+           << "Give me a complete teaching explanation in Chinese.\n\n";
 
     prompt << "=== SOURCE CODE ===\n" << sourceCode << "\n\n";
 
@@ -293,7 +293,7 @@ std::string AIAnalyzer::buildPrompt(const std::string& sourceCode) const
     return prompt.str();
 }
 
-AIAnalysisResult AIAnalyzer::parseResponse(const std::string& raw) const {
+AIAnalysisResult AIAnalyzer::parseResponse(const std::string& raw, bool allowPlainText) const {
     AIAnalysisResult result;
     result.success = false;
     result.rawResponse = raw;
@@ -346,10 +346,18 @@ AIAnalysisResult AIAnalyzer::parseResponse(const std::string& raw) const {
     // Success if we got at least one meaningful field
     if (!result.explanation.empty() || !result.stepByStep.empty()) {
         result.success = true;
-    } else {
-        result.errorMessage = "Could not parse AI response JSON. Raw response:\n" + raw;
+        return result;
     }
 
+    if (allowPlainText) {
+        // Fallback: accept a plain-text answer for follow-up questions.
+        result.success = true;
+        result.explanation = json;
+        result.errorMessage.clear();
+        return result;
+    }
+
+    result.errorMessage = "Could not parse AI response JSON. Raw response:\n" + raw;
     return result;
 }
 
@@ -413,33 +421,32 @@ AIAnalysisResult AIAnalyzer::askFollowUp(const std::string& question) {
         return result;
     }
 
-    // Append the user's follow-up question to history
-    conversationHistory.push_back({"user", question});
+    // Build a follow-up request that allows natural-language answers
+    std::vector<std::pair<std::string, std::string>> messages = conversationHistory;
+    messages.push_back({"user",
+        "This is a follow-up question. Please answer naturally in plain text "
+        "without requiring any special JSON format.\n\n" + question});
 
     try {
-        std::string rawResponse = callChatAPI(conversationHistory);
+        std::string rawResponse = callChatAPI(messages);
         if (rawResponse.empty()) {
             result.errorMessage = "Empty response from AI API.";
             return result;
         }
 
-        result = parseResponse(rawResponse);
+        result = parseResponse(rawResponse, true);
         if (!result.success && result.errorMessage.empty()) {
             result.errorMessage = "Failed to parse AI response.";
         }
 
         // Store assistant response in history
         if (result.success) {
+            conversationHistory.push_back({"user", question});
             conversationHistory.push_back({"assistant", result.rawResponse});
-        } else {
-            // Remove the user question from history on failure so retry is clean
-            conversationHistory.pop_back();
         }
     } catch (const std::exception& e) {
-        conversationHistory.pop_back(); // clean up on error
         result.errorMessage = std::string("API call failed: ") + e.what();
     } catch (...) {
-        conversationHistory.pop_back();
         result.errorMessage = "Unknown error during API call.";
     }
 
