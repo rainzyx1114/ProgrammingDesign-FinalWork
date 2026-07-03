@@ -21,8 +21,8 @@ PKU程序设计实习课程的大作业项目（from 码上搞定队）
 ```
 ProgrammingDesign_FinalWork/
 ├── code_analysis/          # 核心分析引擎（C++）
-│   ├── include/            # 头文件
-│   ├── src/                # 源文件
+│   ├── include/            # 头文件，定义Lexer、Parser、Executor、Analyzer等核心接口
+│   ├── src/                # 源文件，实现词法分析、语法分析、语义检查和执行器
 │
 ├── ui/                     # Qt图形用户界面
 │   ├── main.cpp            # 应用入口
