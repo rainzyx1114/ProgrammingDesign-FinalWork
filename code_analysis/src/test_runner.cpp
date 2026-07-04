@@ -34,6 +34,22 @@ static void printExecutionTrace(const std::vector<Stepsnapshot>& trace) {
             for (const auto& var : frame.variables) {
                 std::cout << "        " << var.name << " (" << var.type << ") = " << var.value << std::endl;
             }
+            if (!frame.objectsOnStack.empty()) {
+                for (const auto& obj : frame.objectsOnStack) {
+                    std::cout << "        stack_obj: " << obj.objectId
+                              << " class=" << obj.className;
+                    if (!obj.baseClass.empty())
+                        std::cout << " base=" << obj.baseClass;
+                    std::cout << " members=" << obj.members.size() << " [";
+                    bool firstMember = true;
+                    for (const auto& m : obj.members) {
+                        if (!firstMember) std::cout << ", ";
+                        firstMember = false;
+                        std::cout << m.name << "=" << m.value;
+                    }
+                    std::cout << "]" << std::endl;
+                }
+            }
         }
         if (!s.state.objectsOnHeap.empty()) {
             for (const auto& obj : s.state.objectsOnHeap) {

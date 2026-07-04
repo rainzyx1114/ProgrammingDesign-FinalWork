@@ -14,21 +14,31 @@ struct VariableInfo {
     VariableInfo() = default;
 };
 
-struct StackFrameView {
-    std::string functionName;
-    int lineNumber;
-    std::vector<VariableInfo> variables;
-};
-struct StackTraceView {
-    std::vector<StackFrameView> frames;
-};
-
 struct MemberInfo {
     std::string name;
     std::string type;
     std::string value;
     bool isMethod;
     std::string accessLevel;
+};
+
+struct ObjectView {
+    std::string objectId;
+    std::string className;
+    std::string baseClass;
+    std::vector<MemberInfo> members;
+    std::map<std::string, std::string> vtable;
+};
+
+struct StackFrameView {
+    std::string functionName;
+    int lineNumber;
+    std::vector<VariableInfo> variables;
+    std::vector<ObjectView> objectsOnStack;
+};
+
+struct StackTraceView {
+    std::vector<StackFrameView> frames;
 };
 
 struct ClassView {
@@ -38,14 +48,6 @@ struct ClassView {
     std::vector<MemberInfo> methods;
     int inheritance_depth;
     std::vector<std::string> derived_classes;
-    std::map<std::string, std::string> vtable;
-};
-
-struct ObjectView {
-    std::string objectId;
-    std::string className;
-    std::string baseClass;
-    std::vector<MemberInfo> members;
     std::map<std::string, std::string> vtable;
 };
 

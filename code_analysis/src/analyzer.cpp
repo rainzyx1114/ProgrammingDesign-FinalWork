@@ -311,6 +311,70 @@ std::vector<ObjectView> CodeAnalyzer::getObjectsOnHeap() {
     return out;
 }
 
+std::vector<ObjectView> CodeAnalyzer::getStackObjects() {
+    std::vector<ObjectView> out;
+    auto slots = memory->getCurrentLexicalSlots();
+    auto names = memory->getLexicalVariableNames();
+    int depth = memory->getCurrentLexicalDepth();
+
+    for (size_t i = 0; i < slots.size(); ++i) {
+        const Value& val = slots[i];
+        if (val.type != Value::OBJECT_REF || !val.objectRef) continue;
+
+        auto obj = val.objectRef;
+
+        // Get variable name
+        std::string varName;
+        if (depth >= 0 && depth < (int)names.size() && i < names[depth].size()) {
+            varName = names[depth][i];
+        }
+        if (varName.empty()) continue;
+
+        // Skip auto-generated slot names
+        if (varName.size() > 4 && varName.find("slot") == 0) {
+            bool isAuto = true;
+            for (size_t k = 4; k < varName.size(); ++k) {
+                if (varName[k] < '0' || varName[k] > '9') { isAuto = false; break; }
+            }
+            if (isAuto) continue;
+        }
+
+        // Determine object ID
+        int foundId = memory->findObjectId(obj);
+        std::string displayId;
+        if (foundId >= 0) {
+            std::string heapKey = "obj" + std::to_string(foundId);
+            if (memory->getHeap().find(heapKey) != memory->getHeap().end()) {
+                continue; // heap object, handled by getObjectsOnHeap()
+            }
+            displayId = "ptr" + std::to_string(foundId);
+        } else {
+            displayId = varName;
+        }
+
+        ObjectView ov;
+        ov.objectId = displayId;
+        ov.className = obj->className;
+        ClassDef* classDef = classModel->getClass(obj->className);
+        ov.baseClass = classDef ? classDef->baseClass : "";
+        for (auto& m : obj->members) {
+            MemberInfo mi;
+            mi.name = m.first;
+            mi.type = "";
+            mi.value = m.second.toString();
+            mi.isMethod = false;
+            if (classDef) {
+                mi.accessLevel = accessLevelToString(classDef->getMemberAccess(m.first));
+            } else {
+                mi.accessLevel = "private";
+            }
+            ov.members.push_back(mi);
+        }
+        out.push_back(ov);
+    }
+    return out;
+}
+
 std::vector<Stepsnapshot> CodeAnalyzer::getExecutionTrace() {
     if (executor) {
         return executor->getExecutionTrace();

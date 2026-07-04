@@ -81,6 +81,7 @@ public:
     // State queries
     std::vector<VariableInfo> getVariables();
     std::vector<ObjectView> getObjectsOnHeap();
+    std::vector<ObjectView> getStackObjects();
     std::vector<Stepsnapshot> getExecutionTrace();
     std::vector<ClassView> getAllClassViews();
 
