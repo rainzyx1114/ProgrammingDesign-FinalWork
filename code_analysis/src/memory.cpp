@@ -219,7 +219,7 @@ std::shared_ptr<Object> Memory::getObjectById(int id) {
 std::shared_ptr<Object> Memory::createArray(int size) {
     auto obj = std::make_shared<Object>("array");
     for (int i = 0; i < size; i++) {
-        obj->setMember(std::to_string(i), Value(0));
+        obj->setMember(std::to_string(i), Value());
     }
     return obj;
 }
