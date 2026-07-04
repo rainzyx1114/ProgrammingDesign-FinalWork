@@ -37,7 +37,23 @@ std::string Value::toString() const {
         case INT: return std::to_string(intVal);
         case FLOAT: return std::to_string(floatVal);
         case BOOL: return boolVal ? "true" : "false";
-        case OBJECT_REF: return "object(" + (objectRef ? objectRef->className : std::string("null")) + ")";
+        case OBJECT_REF: {
+            if (!objectRef) return "object(null)";
+            if (objectRef->className == "array") {
+                std::string result = "[";
+                bool first = true;
+                for (int i = 0; ; i++) {
+                    auto it = objectRef->members.find(std::to_string(i));
+                    if (it == objectRef->members.end()) break;
+                    if (!first) result += ", ";
+                    first = false;
+                    result += it->second.toString();
+                }
+                result += "]";
+                return result;
+            }
+            return "object(" + objectRef->className + ")";
+        }
         case POINTER: return "ptr->obj" + std::to_string(intVal);
         default: return "";
     }
