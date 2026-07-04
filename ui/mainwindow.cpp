@@ -1,7 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "codeeditor.h"
-#include<QDebug>
+#include <QDebug>
 #include <QMessageBox>
 #include <QGroupBox>
 #include <QTableWidget>
@@ -18,6 +18,7 @@
 #include <QPushButton>
 #include <QScrollBar>
 #include <QShortcut>
+#include "markdownparser.h"
 
 // Helper: 将 event 字符串转换为用户友好的描述
 static QString eventToDisplayString(const std::string& event) {
@@ -305,7 +306,14 @@ void MainWindow::on_start_button_clicked()
     // 4. 加载并执行代码
     if(!m_analyzer->loadCode(codeText)){
         qDebug()<<"load code failed";
-        QMessageBox::warning(this,"警告","抱歉，暂时不支持main函数，头文件，以及创建类的对象，请您检查代码后重试");
+        QMessageBox::warning(this,"警告","抱歉，您的代码中可能有语法错误，请您检查代码后重试");
+
+        // AI 模式下即使代码有语法错误也交给 AI 分析
+        // 绕过 CodeAnalyzer::getAIResult() 的 isLoaded 检查（loadCode 失败时 isLoaded=false）
+        if (m_aiMode == AnalysisMode::AI_TEACHING && !m_aiApiKey.empty()) {
+            m_aiFirstAnalysisDone = false;
+            startAIAnalysisDirect(codeText);
+        }
         return;
     }
     m_analyzer->start();
@@ -515,8 +523,7 @@ void MainWindow::renderHeapObjects(const std::vector<ObjectView>& objects)
 
     for (const auto& obj : objects) {
         // 每个堆对象一个 GroupBox，橙色风格（Python Tutor 的 heap 区域风格）
-        QString title = QString::fromStdString(obj.className) +
-                        " [" + QString::fromStdString(obj.objectId) + "]";
+        QString title = QString::fromStdString(obj.className);
         QGroupBox *objBox = new QGroupBox(title);
         objBox->setStyleSheet(R"(
             QGroupBox {
@@ -543,7 +550,7 @@ void MainWindow::renderHeapObjects(const std::vector<ObjectView>& objects)
         // 如果有基类信息，显示继承关系
         if (!obj.baseClass.empty()) {
             QLabel *baseLabel = new QLabel(
-                QString::fromUtf8("extends ") + QString::fromStdString(obj.baseClass));
+                QString::fromUtf8("继承自") + QString::fromStdString(obj.baseClass));
             baseLabel->setStyleSheet("color: #92400E; font-size: 12px; padding: 2px 8px;");
             objLayout->addWidget(baseLabel);
         }
@@ -910,7 +917,7 @@ void MainWindow::createAISidebar()
     // ---- 模式切换按钮（仿网页版 AI "深度思考" 按键）----
     m_aiModeButton = new QPushButton();
     m_aiModeButton->setCheckable(true);
-    m_aiModeButton->setChecked(false);
+    m_aiModeButton->setChecked(true);
     m_aiModeButton->setFixedSize(100, 28);
     m_aiModeButton->setCursor(Qt::PointingHandCursor);
     m_aiModeButton->setToolTip(QString::fromUtf8("切换 AI 深度分析模式"));
@@ -934,7 +941,7 @@ void MainWindow::createAISidebar()
             color: white;
         }
     )");
-    m_aiModeButton->setText(QString::fromUtf8("🧠 标准"));
+    m_aiModeButton->setText(QString::fromUtf8("🧠 AI 分析"));
     connect(m_aiModeButton, &QPushButton::clicked, this, &MainWindow::on_aiModeButton_clicked);
     headerLayout->addWidget(m_aiModeButton);
 
@@ -1029,8 +1036,8 @@ void MainWindow::createAISidebar()
         "<p style='color:#374151; font-size:16px; font-weight:bold; margin-top:16px;'>"
         "AI 代码分析助手</p>"
         "<p style='color:#6B7280; font-size:13px; line-height:1.6;'>"
-        "点击上方 <b style='color:#10B981;'>🧠 标准</b> 切换至 AI 深度分析模式<br/>"
-        "然后在 <b style='color:#2563EB;'>设置 → API 设置</b> 中配置 API Key<br/>"
+        "当前处于 <b style='color:#10B981;'>🧠 AI 深度分析</b> 模式<br/>"
+        "请在 <b style='color:#2563EB;'>设置 → API 设置</b> 中配置 API Key<br/>"
         "运行代码后即可自动获取 AI 分析结果</p>"
         "</div>"
     ));
@@ -1076,18 +1083,18 @@ void MainWindow::createAISidebar()
 
     // 输入模式标签
     m_aiModeLabel = new QLabel(QString::fromUtf8(
-        "<span style='color:#6B7280; font-size:11px;'>"
-        "📋 标准模式 — 切换到 AI 模式以提问</span>"));
+        "<span style='color:#059669; font-size:11px; font-weight:bold;'>"
+        "🧠 AI 深度分析模式 — 运行代码后自动分析，可追问</span>"));
     m_aiModeLabel->setStyleSheet("background: transparent;");
     inputCardLayout->addWidget(m_aiModeLabel);
 
     // 输入框
     m_aiInputEdit = new QTextEdit();
-    m_aiInputEdit->setPlaceholderText(QString::fromUtf8("切换到 AI 模式以向 AI 提问…"));
+    m_aiInputEdit->setPlaceholderText(QString::fromUtf8("向 AI 提问，分析这段代码…"));
     m_aiInputEdit->setMaximumHeight(160);
     m_aiInputEdit->setMinimumHeight(40);
     m_aiInputEdit->setAcceptRichText(false);
-    m_aiInputEdit->setEnabled(false);
+    m_aiInputEdit->setEnabled(true);
     m_aiInputEdit->setStyleSheet(R"(
         QTextEdit {
             border: 1px solid #D1D5DB;
@@ -1138,7 +1145,7 @@ void MainWindow::createAISidebar()
     m_aiSendButton = new QPushButton(QString::fromUtf8("➤ 发送"));
     m_aiSendButton->setFixedSize(72, 32);
     m_aiSendButton->setCursor(Qt::PointingHandCursor);
-    m_aiSendButton->setEnabled(false);
+    m_aiSendButton->setEnabled(true);
     m_aiSendButton->setStyleSheet(R"(
         QPushButton {
             background: #2563EB;
@@ -1160,11 +1167,8 @@ void MainWindow::createAISidebar()
 
     inputCardLayout->addWidget(buttonBar);
 
-    // Ctrl+Enter 快捷键
-    QShortcut *sendShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), m_aiInputEdit);
-    connect(sendShortcut, &QShortcut::activated, this, &MainWindow::on_aiSendButton_clicked);
-    QShortcut *sendShortcut2 = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Enter), m_aiInputEdit);
-    connect(sendShortcut2, &QShortcut::activated, this, &MainWindow::on_aiSendButton_clicked);
+    // Enter 发送，Shift+Enter 换行（通过 eventFilter 实现）
+    m_aiInputEdit->installEventFilter(this);
 
     m_aiInputSplitter->addWidget(inputCard);
     m_aiInputSplitter->setSizes(QList<int>() << 500 << 130);
@@ -1176,6 +1180,11 @@ void MainWindow::createAISidebar()
     // 添加到主 splitter
     m_mainSplitter->addWidget(m_aiSidebar);
     m_mainSplitter->setSizes(QList<int>() << 600 << 380 << 350);
+
+    // 同步初始模式到 CodeAnalyzer
+    if (m_analyzer) {
+        m_analyzer->setAnalysisMode(m_aiMode);
+    }
 }
 
 void MainWindow::on_aiModeButton_clicked()
@@ -1277,6 +1286,67 @@ void MainWindow::on_actionAPISettings_triggered()
     }
 }
 
+// ---- 直接调用 AI（绕过 loadCode 失败时的 isLoaded 检查）----
+void MainWindow::startAIAnalysisDirect(const std::string &sourceCode)
+{
+    if (m_aiRequestInFlight) return;
+    if (m_aiApiKey.empty()) return;
+
+    m_aiChatDisplay->setVisible(true);
+    if (m_aiWelcomeLabel) m_aiWelcomeLabel->setVisible(false);
+    m_aiLoadingLabel->setVisible(true);
+    m_aiSendButton->setVisible(false);
+    m_aiStopButton->setVisible(true);
+    m_aiRequestInFlight = true;
+
+    std::string apiKeyCopy     = m_aiApiKey;
+    std::string apiEndpointCopy = m_aiApiEndpoint;
+    std::string apiModelCopy   = m_aiApiModel;
+
+    m_aiWatcher = new QFutureWatcher<AIAnalysisResult>(this);
+    connect(m_aiWatcher, &QFutureWatcher<AIAnalysisResult>::finished, this,
+        [this]() {
+            m_aiLoadingLabel->setVisible(false);
+            m_aiSendButton->setVisible(true);
+            m_aiStopButton->setVisible(false);
+            m_aiRequestInFlight = false;
+
+            if (!m_aiWatcher) return;
+            AIAnalysisResult result = m_aiWatcher->future().result();
+
+            if (result.success || !result.rawResponse.empty()) {
+                m_aiFirstAnalysisDone = true;
+            }
+            appendChatMessage("ai", renderAIResponse(result));
+            m_aiWatcher->deleteLater();
+            m_aiWatcher = nullptr;
+        });
+
+    QFuture<AIAnalysisResult> future = QtConcurrent::run(
+        [apiKeyCopy, apiEndpointCopy, apiModelCopy, sourceCode]() -> AIAnalysisResult
+    {
+        try {
+            AIAnalyzer ai;
+            ai.setAPIKey(apiKeyCopy);
+            ai.setEndpoint(apiEndpointCopy);
+            ai.setModel(apiModelCopy);
+            return ai.analyze(sourceCode);
+        } catch (const std::exception &e) {
+            AIAnalysisResult fail;
+            fail.success = false;
+            fail.errorMessage = std::string("Exception: ") + e.what();
+            return fail;
+        } catch (...) {
+            AIAnalysisResult fail;
+            fail.success = false;
+            fail.errorMessage = "Unknown error during AI analysis.";
+            return fail;
+        }
+    });
+
+    m_aiWatcher->setFuture(future);
+}
+
 // ---- 自动触发首次 AI 分析（代码执行后）----
 void MainWindow::startAIAnalysis()
 {
@@ -1304,26 +1374,10 @@ void MainWindow::startAIAnalysis()
             if (!m_aiWatcher) return;
             AIAnalysisResult result = m_aiWatcher->future().result();
 
-            if (result.success) {
+            if (result.success || !result.rawResponse.empty()) {
                 m_aiFirstAnalysisDone = true;
-                appendChatMessage("ai", formatAIResponse(result));
-            } else {
-                if (!result.errorMessage.empty() &&
-                    result.errorMessage.find("Cancelled") != std::string::npos) {
-                    appendChatMessage("ai", QString::fromUtf8(
-                        "<div style='background:#FEFCE8; border-left:4px solid #EAB308; "
-                        "border-radius:4px; padding:8px 12px; margin:4px 0;'>"
-                        "<b style='color:#854D0E;'>⏹ 已停止生成</b></div>"));
-                } else {
-                    QString errHtml = QString::fromUtf8(
-                        "<div style='background:#FEF2F2; border-left:4px solid #DC2626; "
-                        "border-radius:4px; padding:8px 12px; margin:4px 0;'>"
-                        "<b style='color:#991B1B;'>⚠ AI 分析失败</b><br>"
-                        "<span style='color:#374151;'>%1</span></div>"
-                    ).arg(QString::fromStdString(result.errorMessage).toHtmlEscaped().replace("\n", "<br>"));
-                    appendChatMessage("ai", errHtml);
-                }
             }
+            appendChatMessage("ai", renderAIResponse(result));
             m_aiWatcher->deleteLater();
             m_aiWatcher = nullptr;
         });
@@ -1413,26 +1467,10 @@ void MainWindow::on_aiSendButton_clicked()
             if (!m_aiWatcher) return;
             AIAnalysisResult result = m_aiWatcher->future().result();
 
-            if (result.success) {
+            if (result.success || !result.rawResponse.empty()) {
                 m_aiFirstAnalysisDone = true;
-                appendChatMessage("ai", formatAIResponse(result));
-            } else {
-                if (!result.errorMessage.empty() &&
-                    result.errorMessage.find("Cancelled") != std::string::npos) {
-                    appendChatMessage("ai", QString::fromUtf8(
-                        "<div style='background:#FEFCE8; border-left:4px solid #EAB308; "
-                        "border-radius:4px; padding:8px 12px; margin:4px 0;'>"
-                        "<b style='color:#854D0E;'>⏹ 已停止生成</b></div>"));
-                } else {
-                    QString errHtml = QString::fromUtf8(
-                        "<div style='background:#FEF2F2; border-left:4px solid #DC2626; "
-                        "border-radius:4px; padding:8px 12px; margin:4px 0;'>"
-                        "<b style='color:#991B1B;'>⚠ AI 分析失败</b><br>"
-                        "<span style='color:#374151;'>%1</span></div>"
-                    ).arg(QString::fromStdString(result.errorMessage).toHtmlEscaped().replace("\n", "<br>"));
-                    appendChatMessage("ai", errHtml);
-                }
             }
+            appendChatMessage("ai", renderAIResponse(result));
             m_aiWatcher->deleteLater();
             m_aiWatcher = nullptr;
         });
@@ -1533,7 +1571,26 @@ void MainWindow::expandAISidebar()
     }
 }
 
+// ---- 输入框按键处理：Enter 发送，Shift+Enter 换行 ----
+bool MainWindow::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == m_aiInputEdit && event->type() == QEvent::KeyPress) {
+        QKeyEvent *keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            // Shift+Enter → 换行（默认行为）
+            if (keyEvent->modifiers() & Qt::ShiftModifier) {
+                return false; // 让 QTextEdit 自己处理
+            }
+            // 单独 Enter → 发送
+            on_aiSendButton_clicked();
+            return true; // 吃掉事件
+        }
+    }
+    return QMainWindow::eventFilter(obj, event);
+}
+
 // ---- 聊天气泡渲染 ----
+// 使用 HTML 表格布局（Qt QTextBrowser 不支持 CSS Flexbox）
 void MainWindow::appendChatMessage(const QString &sender, const QString &htmlContent)
 {
     // 确保聊天显示可见
@@ -1542,40 +1599,33 @@ void MainWindow::appendChatMessage(const QString &sender, const QString &htmlCon
 
     QString bubble;
     if (sender == "user") {
-        // 用户气泡：右对齐，蓝色
+        // 用户气泡：右对齐，蓝色背景
         bubble = QString(
-            "<div style='display:flex; align-items:flex-start; justify-content:flex-end; "
-            "margin:10px 0;'>"
-            "<div style='max-width:80%%;'>"
-            "<div style='background:linear-gradient(135deg, #3B82F6, #2563EB); "
-            "color:#FFFFFF; padding:10px 14px; border-radius:16px 16px 4px 16px; "
-            "font-size:13px; line-height:1.5; "
-            "box-shadow:0 1px 3px rgba(0,0,0,0.1);'>%1</div>"
-            "</div>"
-            "<div style='min-width:28px; height:28px; margin-left:8px; "
-            "border-radius:14px; "
-            "background:linear-gradient(135deg, #3B82F6, #1D4ED8); "
-            "color:white; text-align:center; line-height:28px; font-size:12px; "
-            "font-weight:bold;'>你</div>"
-            "</div>"
+            "<table width='100%' cellspacing='0' cellpadding='0' style='margin:8px 0;'>"
+            "<tr>"
+            "<td align='right'>"
+            "<table cellspacing='0' cellpadding='0'><tr>"
+            "<td style='background-color:#2563EB; color:#FFFFFF; "
+            "padding:10px 14px; font-size:13px; "
+            "border-radius:12px 12px 4px 12px; "
+            "max-width:80%;'>%1</td>"
+            "</tr></table>"
+            "</td></tr></table>"
         ).arg(htmlContent);
     } else {
-        // AI 气泡：左对齐，白色带边框
+        // AI 气泡：左对齐，白色背景带灰色边框
         bubble = QString(
-            "<div style='display:flex; align-items:flex-start; margin:10px 0;'>"
-            "<div style='min-width:28px; height:28px; margin-right:8px; "
-            "border-radius:14px; "
-            "background:linear-gradient(135deg, #10B981, #059669); "
-            "color:white; text-align:center; line-height:28px; font-size:12px; "
-            "font-weight:bold;'>AI</div>"
-            "<div style='max-width:88%%;'>"
-            "<div style='background:#FFFFFF; color:#1F2937; "
-            "padding:10px 14px; border-radius:16px 16px 16px 4px; "
-            "font-size:13px; line-height:1.6; "
+            "<table width='100%' cellspacing='0' cellpadding='0' style='margin:8px 0;'>"
+            "<tr>"
+            "<td>"
+            "<table cellspacing='0' cellpadding='0'><tr>"
+            "<td style='background-color:#FFFFFF; color:#1F2937; "
+            "padding:10px 14px; font-size:13px; "
             "border:1px solid #E5E7EB; "
-            "box-shadow:0 1px 3px rgba(0,0,0,0.06);'>%1</div>"
-            "</div>"
-            "</div>"
+            "border-radius:12px 12px 12px 4px; "
+            "max-width:90%;'>%1</td>"
+            "</tr></table>"
+            "</td></tr></table>"
         ).arg(htmlContent);
     }
 
@@ -1646,4 +1696,153 @@ QString MainWindow::formatAIResponse(const AIAnalysisResult &result)
 
     html += "</div>";
     return html;
+}
+
+// ---- 检测文本是否为 Markdown 格式 ----
+static bool looksLikeMarkdown(const QString &text)
+{
+    int totalLines = 0;
+    int mdLines = 0;
+    const QStringList lines = text.split('\n');
+    for (const QString &line : lines) {
+        const QString t = line.trimmed();
+        if (t.isEmpty()) continue;
+        totalLines++;
+        // 标题
+        if (t.startsWith('#')) { mdLines++; continue; }
+        // 代码块
+        if (t.startsWith("```")) { mdLines++; continue; }
+        // 无序列表
+        if (t.startsWith("- ") || t.startsWith("* ")) { mdLines++; continue; }
+        // 有序列表
+        if (QRegularExpression("^\\d+\\.\\s").match(t).hasMatch()) { mdLines++; continue; }
+        // 引用
+        if (t.startsWith("> ")) { mdLines++; continue; }
+        // 表格
+        if (t.startsWith('|') && t.endsWith('|')) { mdLines++; continue; }
+        // 水平线
+        if (t == "---" || t == "***" || t == "___") { mdLines++; continue; }
+        // 行内标记
+        if (t.contains("**") || t.contains('`')) { mdLines++; continue; }
+    }
+    // 至少 20% 的行包含 Markdown 语法，或者有代码块/表格/标题则直接认为是 MD
+    return totalLines > 0 &&
+           (mdLines >= 2 ||
+            static_cast<double>(mdLines) / totalLines >= 0.2);
+}
+
+// ---- Markdown 文本 → HTML 气泡内容（复用 MarkdownParser）----
+static QString mdToBubbleHtml(const QString &mdText)
+{
+    QString mdHtml = MarkdownParser::toHtml(mdText, QString());
+    // 剥离 MarkdownParser 生成的 <html><body> 外层
+    int bodyStart = mdHtml.indexOf(QStringLiteral("<body"));
+    if (bodyStart >= 0) {
+        bodyStart = mdHtml.indexOf('>', bodyStart) + 1;
+    } else {
+        bodyStart = mdHtml.indexOf('>') + 1;
+    }
+    int bodyEnd = mdHtml.lastIndexOf(QStringLiteral("</body>"));
+    if (bodyEnd > bodyStart && bodyEnd < mdHtml.size()) {
+        mdHtml = mdHtml.mid(bodyStart, bodyEnd - bodyStart);
+    }
+    // 修复：MarkdownParser 生成的表格只有 <tr> 没有外层 <table>，QTextBrowser 无法渲染
+    // (<tr>...序列) → <table>...序列</table>
+    {
+        static const QRegularExpression trBlock(
+            "((?:<tr>.*?</tr>\\s*)+)",
+            QRegularExpression::DotMatchesEverythingOption);
+        QString tableWrap = QStringLiteral(
+            "<table style='border-collapse:collapse; width:100%; margin:4px 0;"
+            " font-size:12px;'>\\1</table>");
+        mdHtml.replace(trBlock, tableWrap);
+    }
+    // 用 tiny <p> 替换 <br>（QTextBrowser 不支持 CSS 控制 br 高度）
+    mdHtml.replace(QRegularExpression("<br>\\s*"),
+                   "<p style='margin:0; font-size:3px; line-height:1;'><br></p>");
+    return QString(
+        "<div style='font-size:13px; line-height:1.35; color:#1F2937; "
+        "background:#ECFDF5; border-radius:6px; padding:8px 10px;'>%1</div>"
+    ).arg(mdHtml);
+}
+
+// ---- 统一的 AI 响应渲染（结构化 JSON 优先 → Markdown → 纯文本）----
+QString MainWindow::renderAIResponse(const AIAnalysisResult &result)
+{
+    // ---- success 分支 ----
+    if (result.success) {
+        // 检测 allowPlainText 回退：仅 explanation 有内容且是 Markdown
+        // (ai_analyzer.cpp parseResponse allowPlainText=true 将所有文本塞进 explanation)
+        bool onlyExplanation = !result.explanation.empty() &&
+                                result.stepByStep.empty() &&
+                                result.suggestions.empty() &&
+                                result.potentialBugs.empty() &&
+                                result.concepts.empty();
+        if (onlyExplanation) {
+            QString expl = QString::fromStdString(result.explanation);
+            if (looksLikeMarkdown(expl)) {
+                return mdToBubbleHtml(expl);
+            }
+        }
+
+        // 结构化 JSON → 多彩卡片
+        bool hasStructured = !result.explanation.empty() ||
+                              !result.stepByStep.empty() ||
+                              !result.suggestions.empty() ||
+                              !result.potentialBugs.empty() ||
+                              !result.concepts.empty();
+        if (hasStructured) {
+            return formatAIResponse(result);
+        }
+        // success=true 但所有字段都空 → 尝试 rawResponse
+    }
+
+    // ---- 失败 / 无结构化内容 → 从 rawResponse 恢复 ----
+    QString text = QString::fromStdString(result.rawResponse).trimmed();
+    if (text.isEmpty()) {
+        QString errMsg = QString::fromStdString(result.errorMessage);
+        return QString::fromUtf8(
+            "<div style='background:#FEF2F2; border-left:4px solid #DC2626; "
+            "border-radius:4px; padding:8px 12px; margin:4px 0;'>"
+            "<b style='color:#991B1B;'>⚠ AI 分析失败</b><br>"
+            "<span style='color:#374151;'>%1</span></div>"
+        ).arg(errMsg.toHtmlEscaped().replace("\n", "<br>"));
+    }
+
+    // 如果是 OpenAI JSON 包装 → 提取 "content" 字段
+    if (text.startsWith('{')) {
+        QRegularExpression contentRe("\"content\"\\s*:\\s*\"");
+        QRegularExpressionMatch m = contentRe.match(text);
+        if (m.hasMatch()) {
+            int pos = m.capturedEnd();
+            QString extracted;
+            while (pos < text.size()) {
+                if (text[pos] == '\\' && pos + 1 < text.size()) {
+                    QChar next = text[pos + 1];
+                    if (next == 'n')      { extracted += '\n'; pos += 2; continue; }
+                    if (next == 'r')      { extracted += '\r'; pos += 2; continue; }
+                    if (next == 't')      { extracted += '\t'; pos += 2; continue; }
+                    if (next == '"')      { extracted += '"';  pos += 2; continue; }
+                    if (next == '\\')     { extracted += '\\'; pos += 2; continue; }
+                    extracted += text[pos]; pos++; continue;
+                }
+                if (text[pos] == '"') break;
+                extracted += text[pos];
+                pos++;
+            }
+            if (!extracted.isEmpty()) {
+                text = extracted;
+            }
+        }
+    }
+
+    // Markdown 渲染
+    if (looksLikeMarkdown(text)) {
+        return mdToBubbleHtml(text);
+    }
+
+    // 纯文本兜底
+    return QString(
+        "<div style='font-size:13px; line-height:1.6; color:#374151;'>%1</div>"
+    ).arg(text.toHtmlEscaped().replace("\n", "<br>"));
 }
