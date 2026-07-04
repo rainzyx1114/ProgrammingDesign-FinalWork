@@ -1,6 +1,9 @@
 # ProgrammingDesign-FinalWork
 
 PKU程序设计实习课程的大作业项目（from 码上搞定队）
+演示链接：https://disk.pku.edu.cn/link/AA4EFE390A78A14F89ADE0288252FEFB04
+文件名：61-演示.mp4
+有效期限：永久有效
 
 ## 📋 项目简介
 
